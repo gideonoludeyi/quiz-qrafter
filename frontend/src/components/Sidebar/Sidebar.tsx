@@ -1,7 +1,7 @@
 import React from "react";
-import styles from "./sidebar.module.css";
-import { useTheme } from "../../containers/Admin/ThemeContext";
-import settingsIcon from "../../assets/settings_icon.svg";
+import { RiFileTextLine, RiSettings3Line } from "@remixicon/react";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 const Sidebar: React.FC<{
   isOpen: boolean;
@@ -10,43 +10,33 @@ const Sidebar: React.FC<{
   setActiveMenu: (menu: "quiz" | "settings") => void;
   toggleSettings?: () => void;
 }> = ({ isOpen, closeSidebar, activeMenu, setActiveMenu, toggleSettings }) => {
-  const { theme } = useTheme();
-  const themeColors = {
-    light: "#7a84f9",
-    dark: "#808080",
-  };
-
-  const currentColor = themeColors[theme];
-
-  const handleMenuClick = (menu: "quiz" | "settings") => {
-    setActiveMenu(menu);
+  const handleSettingsClick = () => {
+    closeSidebar();
+    toggleSettings?.();
   };
 
   return (
-    <aside
-      className={`${styles.sidebar} ${isOpen ? styles.open : ""}`}
-      style={{ backgroundColor: currentColor }}
-    >
-      <button className={styles.closeButton} onClick={closeSidebar}>
-        ×
-      </button>
-      <nav className={styles.nav}>
-        <ul>
-          <li
-            className={activeMenu === "quiz" ? styles.active : ""}
-            onClick={() => handleMenuClick("quiz")}
+    <Sheet open={isOpen} onOpenChange={(open) => !open && closeSidebar()}>
+      <SheetContent side="left" className="data-[side=left]:w-64">
+        <SheetHeader>
+          <SheetTitle>Menu</SheetTitle>
+        </SheetHeader>
+        <nav className="flex flex-col gap-1 px-4">
+          <Button
+            variant={activeMenu === "quiz" ? "secondary" : "ghost"}
+            className="justify-start"
+            onClick={() => setActiveMenu("quiz")}
           >
-            <button>Quiz</button>
-          </li>
-          <li
-            className={activeMenu === "settings" ? styles.active : ""}
-            onClick={() => handleMenuClick("quiz")}
-          >
-            <button onClick={toggleSettings}>Settings</button>
-          </li>
-        </ul>
-      </nav>
-    </aside>
+            <RiFileTextLine data-icon="inline-start" />
+            Quiz
+          </Button>
+          <Button variant="ghost" className="justify-start" onClick={handleSettingsClick}>
+            <RiSettings3Line data-icon="inline-start" />
+            Settings
+          </Button>
+        </nav>
+      </SheetContent>
+    </Sheet>
   );
 };
 

@@ -4,7 +4,7 @@ import Hero from "../../components/Hero/Hero";
 import Feature from "../../components/Feature/Feature";
 import Testimonials from "../../components/Testimonials/Testimonials";
 import Footer from "../../components/Footer/Footer";
-import styles from "./home.module.css";
+import { Button } from "@/components/ui/button";
 import image1 from "../../assets/courses.png";
 import Benefit from "../../components/Benefit/Benefit";
 
@@ -34,20 +34,17 @@ const Home = () => {
   ]);
 
   return (
-    <div className={styles.home}>
+    <div className="min-h-svh">
       <Header />
       <Hero />
-      <section className={styles.featureSection}>
-        <div className={styles.sectionHeader}>
-          <h2 className={styles.sectionTitle}>Most popular courses</h2>
-          <button
-            className={styles.viewAllButton}
-            onClick={() => setShowAllFeatures(!showAllFeatures)}
-          >
+      <section className="mx-auto max-w-6xl px-4 py-16">
+        <div className="mb-8 flex items-center justify-between">
+          <h2 className="font-heading text-3xl font-bold tracking-tight">Most popular courses</h2>
+          <Button variant="link" onClick={() => setShowAllFeatures(!showAllFeatures)}>
             {showAllFeatures ? "View Less" : "View All"}
-          </button>
+          </Button>
         </div>
-        <div className={styles.featuresGrid}>
+        <div className="grid gap-6 sm:grid-cols-2">
           {features.slice(0, showAllFeatures ? features.length : 2).map((feature, index) => (
             <Feature
               key={index}

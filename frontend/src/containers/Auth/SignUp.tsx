@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import Logo from "../../assets/quiz_qrafter_logo_dark.svg";
+import { Button } from "@/components/ui/button";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "../../services/auth";
-import styles from "./auth.module.css";
+import AuthLayout from "./AuthLayout";
 
 const SignUp = () => {
   const { signUp } = useAuth();
@@ -93,76 +95,87 @@ const SignUp = () => {
   };
 
   return (
-    <>
-      <header className={styles.authHeader}>
-        <Link to="/">
-          <img src={Logo} alt="Quiz Qrafter" className={styles.authLogo} />
-        </Link>
-      </header>
-      <div className={styles.authContainer}>
-        <div className={styles.authCard}>
-          <h1 className={styles.authTitle}>Get started with Quiz Qrafter</h1>
-
-          <form action="" onSubmit={handleSignUp}>
-            <input
+    <AuthLayout
+      title="Get started with Quiz Qrafter"
+      footer={
+        <>
+          Already have an account?
+          <Button
+            variant="link"
+            className="px-1"
+            nativeButton={false}
+            render={<Link to="/login" />}
+          >
+            Log in
+          </Button>
+        </>
+      }
+      finePrint={
+        <>
+          By signing up, you agree to Quiz Qrafter's{" "}
+          <Link to="/terms" className="underline underline-offset-4 hover:text-foreground">
+            Terms of Use
+          </Link>{" "}
+          and{" "}
+          <Link to="/privacy" className="underline underline-offset-4 hover:text-foreground">
+            Privacy Policy
+          </Link>
+          .
+        </>
+      }
+    >
+      <form onSubmit={handleSignUp}>
+        <FieldGroup>
+          <Field data-invalid={!!error.firstname}>
+            <FieldLabel htmlFor="firstname">First name</FieldLabel>
+            <Input
+              id="firstname"
               type="text"
-              className={styles.authInput}
-              placeholder="First Name"
+              aria-invalid={!!error.firstname}
               onChange={(event) => handleFirstName(event.target.value)}
               value={firstname}
             />
-
-            {error && <p className={styles.authError}>{error.firstname}</p>}
-            <input
+            <FieldError>{error.firstname}</FieldError>
+          </Field>
+          <Field data-invalid={!!error.lastname}>
+            <FieldLabel htmlFor="lastname">Last name</FieldLabel>
+            <Input
+              id="lastname"
               type="text"
-              className={styles.authInput}
-              placeholder="Last Name"
+              aria-invalid={!!error.lastname}
               onChange={(event) => handleLastName(event.target.value)}
               value={lastname}
             />
-
-            {error && <p className={styles.authError}>{error.lastname}</p>}
-            <input
-              type="text"
-              className={styles.authInput}
-              placeholder="Email"
+            <FieldError>{error.lastname}</FieldError>
+          </Field>
+          <Field data-invalid={!!error.email}>
+            <FieldLabel htmlFor="email">Email</FieldLabel>
+            <Input
+              id="email"
+              type="email"
+              aria-invalid={!!error.email}
               onChange={(event) => handleEmail(event.target.value)}
               value={email}
             />
-
-            {error && <p className={styles.authError}>{error.email}</p>}
-            <input
+            <FieldError>{error.email}</FieldError>
+          </Field>
+          <Field data-invalid={!!error.password}>
+            <FieldLabel htmlFor="password">Password</FieldLabel>
+            <Input
+              id="password"
               type="password"
-              className={styles.authInput}
-              placeholder="Password"
+              aria-invalid={!!error.password}
               onChange={(event) => handlePassword(event.target.value)}
               value={password}
             />
-
-            {error && <p className={styles.authError}>{error.password}</p>}
-            <button
-              type="submit"
-              className={`${styles.authButton} ${isValid ? styles.authButton : styles.disabledButton}`}
-              disabled={!isValid}
-            >
-              Sign up
-            </button>
-          </form>
-
-          <footer className={styles.authFooter}>
-            Already have an account?{" "}
-            <Link to="/login" className={styles.authToggle}>
-              Log in
-            </Link>
-          </footer>
-        </div>
-
-        <div className={styles.authTermPolicy}>
-          By signing up, you agree to Quiz Qrafter's <Link to="/terms">Terms of Use</Link> and{" "}
-          <Link to="/privacy">Privacy Policy</Link>.
-        </div>
-      </div>
-    </>
+            <FieldError>{error.password}</FieldError>
+          </Field>
+          <Button type="submit" className="w-full" disabled={!isValid}>
+            Sign up
+          </Button>
+        </FieldGroup>
+      </form>
+    </AuthLayout>
   );
 };
 

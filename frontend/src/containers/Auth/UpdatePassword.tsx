@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
-import Logo from "../../assets/quiz_qrafter_logo_dark.svg"; // Assuming this path is correct
-import { useAuth } from "../../services/auth";
-import styles from "./auth.module.css";
+import { useNavigate, useLocation } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import AuthLayout from "./AuthLayout";
 
 const UpdatePassword = () => {
   const [newPassword, setNewPassword] = useState("");
@@ -79,45 +80,39 @@ const UpdatePassword = () => {
   };
 
   return (
-    <>
-      <header className={styles.authHeader}>
-        <Link to="/">
-          <img src={Logo} alt="Quiz Qrafter" className={styles.authLogo} />
-        </Link>
-      </header>
-      <div className={styles.authContainer}>
-        <div className={styles.authCard}>
-          <h1 className={styles.authTitle}>Update Your Password</h1>
-          <form action="" onSubmit={handleSubmit}>
-            <input
+    <AuthLayout title="Update Your Password">
+      <form onSubmit={handleSubmit}>
+        <FieldGroup>
+          <Field data-invalid={!!errorNew}>
+            <FieldLabel htmlFor="new-password">New password</FieldLabel>
+            <Input
+              id="new-password"
               type="password"
-              className={styles.authInput}
-              placeholder="New Password"
+              aria-invalid={!!errorNew}
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
             />
-            {errorNew && <p className={styles.authError}>{errorNew}</p>}
-            <input
+            <FieldError>{errorNew}</FieldError>
+          </Field>
+          <Field data-invalid={!!errorConfirm}>
+            <FieldLabel htmlFor="confirm-password">Confirm new password</FieldLabel>
+            <Input
+              id="confirm-password"
               type="password"
-              className={styles.authInput}
-              placeholder="Confirm New Password"
+              aria-invalid={!!errorConfirm}
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
             />
-            {errorConfirm && <p className={styles.authError}>{errorConfirm}</p>}
-            <button
-              type="submit"
-              className={`${styles.authButton} ${isValid ? styles.authButton : styles.disabledButton}`}
-              disabled={!isValid}
-            >
-              Update Password
-            </button>
-          </form>
-          {message && <p className={styles.authMessage}>{message}</p>}
-          {messageBad && <p className={styles.authMessageBad}>{messageBad}</p>}
-        </div>
-      </div>
-    </>
+            <FieldError>{errorConfirm}</FieldError>
+          </Field>
+          <Button type="submit" className="w-full" disabled={!isValid}>
+            Update Password
+          </Button>
+          {message && <p className="text-sm text-muted-foreground">{message}</p>}
+          {messageBad && <p className="text-sm text-destructive">{messageBad}</p>}
+        </FieldGroup>
+      </form>
+    </AuthLayout>
   );
 };
 

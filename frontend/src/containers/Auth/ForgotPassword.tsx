@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import Logo from "../../assets/quiz_qrafter_logo_dark.svg"; // Assuming this path is correct
-import { useAuth } from "../../services/auth";
-import styles from "./auth.module.css";
+import { Button } from "@/components/ui/button";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import AuthLayout from "./AuthLayout";
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
@@ -50,41 +51,35 @@ const ForgotPassword = () => {
   };
 
   return (
-    <>
-      <header className={styles.authHeader}>
-        <Link to="/">
-          <img src={Logo} alt="Quiz Qrafter" className={styles.authLogo} />
-        </Link>
-      </header>
-      <div className={styles.authContainer}>
-        <div className={styles.authCard}>
-          <h1 className={styles.authTitle}>Forgot Password</h1>
-          <form action="" onSubmit={handleSubmit}>
-            <input
+    <AuthLayout
+      title="Forgot Password"
+      footer={
+        <Button variant="link" nativeButton={false} render={<Link to="/login" />}>
+          Back to login
+        </Button>
+      }
+    >
+      <form onSubmit={handleSubmit}>
+        <FieldGroup>
+          <Field data-invalid={!!error.email}>
+            <FieldLabel htmlFor="email">Email</FieldLabel>
+            <Input
+              id="email"
               type="email"
-              className={styles.authInput}
               placeholder="Enter your email"
+              aria-invalid={!!error.email}
               value={email}
               onChange={(event) => handleEmail(event.target.value)}
             />
-            {error && <p className={styles.authError}>{error.email}</p>}
-            <button
-              type="submit"
-              className={`${styles.authButton} ${isValid ? styles.authButton : styles.disabledButton}`}
-              disabled={!isValid}
-            >
-              Send Reset Link
-            </button>
-          </form>
-          {message && <p className={styles.authMessage}>{message}</p>}
-          <footer className={styles.authFooter}>
-            <Link to="/login" className={styles.authToggle}>
-              Back to login
-            </Link>
-          </footer>
-        </div>
-      </div>
-    </>
+            <FieldError>{error.email}</FieldError>
+          </Field>
+          <Button type="submit" className="w-full" disabled={!isValid}>
+            Send Reset Link
+          </Button>
+          {message && <p className="text-sm text-muted-foreground">{message}</p>}
+        </FieldGroup>
+      </form>
+    </AuthLayout>
   );
 };
 

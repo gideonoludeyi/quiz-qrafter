@@ -21,6 +21,14 @@ release. Add a tool name to select part of the graph. For example, run
 `vp toolchain vite`. Use `--global` to ignore the local `vite-plus` package. Use
 `vp why <package>` to show the package-manager dependency graph.
 
+## Adding Vite Plugins (npm Peer Conflicts)
+
+The `vite` alias points at `@voidzero-dev/vite-plus-core@1.x`, which bundles Vite 8 but reports version `1.x`. npm checks plugin peer ranges such as `vite@"^5 || ^6 || ^7 || ^8"` against `1.x`, so `vp add <vite-plugin>` fails with `ERESOLVE`. Overrides do not fix this.
+
+To add or upgrade a Vite plugin, edit `package.json` by hand and run `npm install --legacy-peer-deps` from the repo root. Do not set `legacy-peer-deps` in `.npmrc`, because that turns off peer checks for the whole repo. After the lockfile is updated, a plain `vp install` works.
+
+Remove this workaround after upgrading to a Vite+ release that includes [PR #3317](https://github.com/voidzero-dev/vite-plus/pull/3317), which aligns the core version with the bundled Vite version. Tracking issue: [#2806](https://github.com/voidzero-dev/vite-plus/issues/2806).
+
 ## Review Checklist
 
 - [ ] Run `vp install` after pulling remote changes and before getting started.

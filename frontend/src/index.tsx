@@ -6,6 +6,7 @@ import reportWebVitals from "./reportWebVitals";
 import { AuthProvider } from "./services/auth";
 import { LocalStorageAuthService } from "./services/auth/localStorageAuthService";
 // import { QuizQrafterAuthService } from "./services/auth/quizQrafterAuthService";
+import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "./containers/Admin/ThemeContext";
 import { DocumentProvider } from "./services/document/context";
 import { LocalStorageDocumentService } from "./services/document/localStorageDocumentService";
@@ -30,6 +31,7 @@ root.render(
         <QuizProvider service={quizService}>
           <ThemeProvider>
             <App />
+            <Toaster />
           </ThemeProvider>
         </QuizProvider>
       </DocumentProvider>

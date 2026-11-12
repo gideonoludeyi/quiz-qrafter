@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ToastContainer, toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
-import Logo from "../../assets/quiz_qrafter_logo_dark.svg";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "../../services/auth";
-import styles from "./auth.module.css";
+import AuthLayout from "./AuthLayout";
 
 const Login = () => {
   const { authenticated, login } = useAuth();
@@ -76,70 +77,61 @@ const Login = () => {
   const notify = () =>
     toast.info(
       "Reach out to the Quizqrafter team at quizqrafter@gmail.com to reset your password.",
-      {
-        position: "top-center",
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-      },
+      { position: "top-center", duration: 5000 },
     );
 
   return (
-    <>
-      <ToastContainer />
-      <header className={styles.authHeader}>
-        <Link to="/">
-          <img src={Logo} alt="Quiz Qrafter" className={styles.authLogo} />
-        </Link>
-      </header>
-      <div className={styles.authContainer}>
-        <div className={styles.authCard}>
-          <h1 className={styles.authTitle}>Welcome back</h1>
-          <form onSubmit={handleLogin}>
-            <input
+    <AuthLayout
+      title="Welcome back"
+      footer={
+        <>
+          Don't have an account?
+          <Button
+            variant="link"
+            className="px-1"
+            nativeButton={false}
+            render={<Link to="/signup" />}
+          >
+            Sign up
+          </Button>
+        </>
+      }
+      finePrint="By signing up, you agree to Quiz Qrafter's Terms of Use and Privacy Policy."
+    >
+      <form onSubmit={handleLogin}>
+        <FieldGroup>
+          <Field data-invalid={!!error.email}>
+            <FieldLabel htmlFor="email">Email</FieldLabel>
+            <Input
+              id="email"
               type="email"
-              className={styles.authInput}
-              placeholder="Email"
+              placeholder="you@example.com"
+              aria-invalid={!!error.email}
               onChange={(event) => handleEmail(event.target.value)}
             />
-            {error.email && <p className={styles.authError}>{error.email}</p>}
-            <input
+            <FieldError>{error.email}</FieldError>
+          </Field>
+          <Field data-invalid={!!error.password}>
+            <div className="flex items-center">
+              <FieldLabel htmlFor="password">Password</FieldLabel>
+              <Button type="button" variant="link" size="xs" className="ml-auto" onClick={notify}>
+                Forgot password?
+              </Button>
+            </div>
+            <Input
+              id="password"
               type="password"
-              className={styles.authInput}
-              placeholder="Password"
+              aria-invalid={!!error.password}
               onChange={(event) => handlePassword(event.target.value)}
             />
-            {error.password && <p className={styles.authError}>{error.password}</p>}
-            <button
-              type="submit"
-              className={`${styles.authButton} ${isValid ? "" : styles.disabledButton}`}
-              disabled={!isValid}
-            >
-              Log in
-            </button>
-          </form>
-          <button
-            onClick={notify}
-            className={styles.authToggle}
-            style={{ background: "none", border: "none", color: "#007bff" }}
-          >
-            Forgot Password
-          </button>
-          <footer className={styles.authFooter}>
-            Don't have an account?{" "}
-            <Link to="/signup" className={styles.authToggle}>
-              Sign up
-            </Link>
-          </footer>
-        </div>
-        <footer className={styles.authTermPolicy}>
-          By signing up, you agree to Quiz Qrafter's Terms of Use and Privacy Policy.
-        </footer>
-      </div>
-    </>
+            <FieldError>{error.password}</FieldError>
+          </Field>
+          <Button type="submit" className="w-full" disabled={!isValid}>
+            Log in
+          </Button>
+        </FieldGroup>
+      </form>
+    </AuthLayout>
   );
 };
 

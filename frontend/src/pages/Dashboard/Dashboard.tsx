@@ -1,23 +1,19 @@
 import React, { useState } from "react";
+import { RiMenuLine } from "@remixicon/react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "../../services/auth";
-import styles from "./dashboard.module.css";
 import Sidebar from "../../components/Sidebar/Sidebar";
-import sbStyles from "../../components/Sidebar/sidebar.module.css";
-import Logo from "../../assets/quiz_qrafter_logo_dark.svg";
+import LogoDark from "../../assets/quiz_qrafter_logo_dark.svg";
+import LogoLight from "../../assets/quiz_qrafter_logo_light.svg";
 import { useTheme } from "../../containers/Admin/ThemeContext";
 import Quiz from "../../containers/Admin/Quiz";
 import Settings from "../../containers/Admin/Settings";
 
 const Dashboard: React.FC = () => {
   const { user, signOut } = useAuth();
-  const themeColors = {
-    light: "#7a84f9",
-    dark: "#808080",
-  };
-
   const { theme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const currentColor = themeColors[theme];
   const [activeMenu, setActiveMenu] = useState<"quiz" | "settings">("quiz");
   const [showSettings, setShowSettings] = useState(false);
   const toggleSettings = () => {
@@ -33,53 +29,42 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <>
-      <div className={styles.dashboard}>
-        <header className={styles.header} style={{ backgroundColor: currentColor }}>
-          <div className={styles.logoMenu}>
-            <button onClick={toggleSidebar} className={styles.menuButton}>
-              ☰
-            </button>
-          </div>
-          <img src={Logo} alt="Quiz Qrafter" className={styles.dashboardLogo} />
-          <div className={styles.headerContent}>
-            <span className={styles.email}>{user?.email}</span>
-            <button onClick={handleSignOut} className={styles.logoutButton}>
-              LOGOUT
-            </button>
-          </div>
-        </header>
-        <div className={styles.mainContent}>
-          <div className={`${sbStyles.sidebar} ${sidebarOpen ? sbStyles.open : ""}`}>
-            <Sidebar
-              isOpen={sidebarOpen}
-              closeSidebar={toggleSidebar}
-              activeMenu={activeMenu}
-              setActiveMenu={setActiveMenu}
-              toggleSettings={toggleSettings}
-            />
-          </div>
-          <main className={`${styles.content} ${sidebarOpen ? styles.contentWithSidebar : ""}`}>
-            {activeMenu === "quiz" ? <Quiz /> : null}
-          </main>
+    <div className="flex min-h-svh flex-col">
+      <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b bg-background px-4">
+        <Button variant="ghost" size="icon" onClick={toggleSidebar} aria-label="Open menu">
+          <RiMenuLine />
+        </Button>
+        <img
+          src={theme === "dark" ? LogoLight : LogoDark}
+          alt="Quiz Qrafter"
+          className="h-7 w-auto"
+        />
+        <div className="ml-auto flex items-center gap-3">
+          <span className="hidden text-sm text-muted-foreground sm:inline">{user?.email}</span>
+          <Button variant="outline" size="sm" onClick={handleSignOut}>
+            Log out
+          </Button>
         </div>
-        {showSettings && (
-          <div className={styles.settingsModal}>
-            <div className={styles.settingsModalHeader}>
-              <button
-                className={styles.settingsModalCloseButton}
-                onClick={() => setShowSettings(false)}
-              >
-                ×
-              </button>
-            </div>
-            <div className={styles.settingsModalContent}>
-              <Settings />
-            </div>
-          </div>
-        )}
-      </div>
-    </>
+      </header>
+      <Sidebar
+        isOpen={sidebarOpen}
+        closeSidebar={toggleSidebar}
+        activeMenu={activeMenu}
+        setActiveMenu={setActiveMenu}
+        toggleSettings={toggleSettings}
+      />
+      <main className="mx-auto w-full max-w-5xl flex-1 p-4 sm:p-6">
+        {activeMenu === "quiz" ? <Quiz /> : null}
+      </main>
+      <Dialog open={showSettings} onOpenChange={setShowSettings}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Settings</DialogTitle>
+          </DialogHeader>
+          <Settings />
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 };
 

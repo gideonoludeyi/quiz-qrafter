@@ -3,9 +3,11 @@ import { useQuizAPI } from "../../services/quiz/context";
 import { useDocumentAPI } from "../../services/document/context";
 import MarkdownEditor from "react-markdown-editor-lite";
 import "react-markdown-editor-lite/lib/index.css";
-import { PulseLoader } from "react-spinners";
 import markdownIt from "markdown-it";
-import styles from "./admin.module.css";
+import { toast } from "sonner";
+import { RiUploadLine, RiDownloadLine } from "@remixicon/react";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 
 const mdParser = markdownIt(/* Markdown-it options */);
 
@@ -26,14 +28,14 @@ const Quiz = () => {
     if (file) {
       try {
         await upload(file);
-        alert("File uploaded successfully!");
+        toast.success("File uploaded successfully!");
         await generateMD(fileName);
       } catch (err) {
         const error = err as Error;
-        alert(`Failed to upload file: ${error.message}`);
+        toast.error(`Failed to upload file: ${error.message}`);
       }
     } else {
-      alert("Please select a file to upload.");
+      toast.error("Please select a file to upload.");
     }
   }, [file, fileName, upload, generateMD]);
 
@@ -42,7 +44,7 @@ const Quiz = () => {
       console.log({ fileName });
       await generatePDF(fileName);
     } else {
-      alert("Please select a file first.");
+      toast.error("Please select a file first.");
     }
   }, [fileName, generatePDF]);
 
@@ -51,47 +53,51 @@ const Quiz = () => {
   }, [markdown, setEditableMarkdown]);
 
   return (
-    <div className={styles.quizContainer}>
-      <div className={styles.toolbar}>
-        <label className={styles.fileInputLabel}>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <label
+          className={buttonVariants({
+            variant: "outline",
+            className:
+              "max-w-xs cursor-pointer has-disabled:pointer-events-none has-disabled:opacity-50",
+          })}
+        >
           <input
             type="file"
             onChange={handleFileChange}
-            className={styles.fileInput}
+            className="sr-only"
             disabled={uploadLoading || pdfLoading}
             accept=".pdf,.docx,.txt,image/*"
-            style={{ display: "none" }}
           />
-          {uploadLoading || pdfLoading ? (
-            <PulseLoader color="#ffffff" size={10} />
-          ) : (
-            fileName || "Choose File"
-          )}
+          {uploadLoading || pdfLoading ? <Spinner /> : null}
+          <span className="truncate">{fileName || "Choose File"}</span>
         </label>
-        <button
-          onClick={handleUpload}
-          disabled={uploadLoading || !file}
-          className={styles.uploadButton}
-        >
+        <Button onClick={handleUpload} disabled={uploadLoading || !file}>
+          <RiUploadLine data-icon="inline-start" />
           Upload
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="secondary"
           onClick={handleDownloadPDF}
           disabled={pdfLoading || !editableMarkdown}
-          className={styles.downloadButton}
         >
+          <RiDownloadLine data-icon="inline-start" />
           Download PDF
-        </button>
+        </Button>
       </div>
-      <MarkdownEditor
-        value={editableMarkdown}
-        style={{ height: "500px", width: "100%" }}
-        renderHTML={(text) => mdParser.render(text)}
-        onChange={({ text }) => setEditableMarkdown(text)}
-      />
-      {uploadError && <p className={styles.errorText}>Upload Error: {uploadError.message}</p>}
-      {pdfError && <p className={styles.errorText}>PDF Error: {pdfError.message}</p>}
-      <p>Note: PDF uploads must be 15 pages or less.</p>
+      <div className="overflow-hidden rounded-lg border">
+        <MarkdownEditor
+          value={editableMarkdown}
+          style={{ height: "500px", width: "100%", border: "none" }}
+          renderHTML={(text) => mdParser.render(text)}
+          onChange={({ text }) => setEditableMarkdown(text)}
+        />
+      </div>
+      {uploadError && (
+        <p className="text-sm text-destructive">Upload Error: {uploadError.message}</p>
+      )}
+      {pdfError && <p className="text-sm text-destructive">PDF Error: {pdfError.message}</p>}
+      <p className="text-sm text-muted-foreground">Note: PDF uploads must be 15 pages or less.</p>
     </div>
   );
 };

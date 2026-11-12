@@ -1,21 +1,20 @@
-import React from "react";
-import Slider from "react-slick";
-import "slick-carousel/slick/slick.css";
-import "slick-carousel/slick/slick-theme.css";
-import styles from "./testimonials.module.css";
+import { useRef } from "react";
+import Autoplay from "embla-carousel-autoplay";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
 import profileImage from "../../assets/profile.jpg";
 
 const Testimonials = () => {
-  const settings = {
-    dots: true,
-    infinite: true,
-    speed: 500,
-    slidesToShow: 1,
-    slidesToScroll: 1,
-    autoplay: true,
-    autoplaySpeed: 3000,
-    pauseOnHover: true,
-  };
+  const autoplay = useRef(
+    Autoplay({ delay: 3000, stopOnMouseEnter: true, stopOnInteraction: false }),
+  );
   // Placeholder data for testimonials
   const testimonials = [
     {
@@ -50,24 +49,36 @@ const Testimonials = () => {
   ];
 
   return (
-    <section className={styles.testimonials}>
-      <h2 className={styles.heading}>What students say</h2>
-      <Slider {...settings}>
-        {testimonials.map((testimonial) => (
-          <div key={testimonial.id} className={styles.slide}>
-            <blockquote className={styles.testimonial}>
-              {/* Only the image is wrapped with <a> tag */}
-              <a href={testimonial.linkedin} target="_blank" rel="noopener noreferrer">
-                <img src={testimonial.image} alt="" className={styles.testimonialImage} />
-              </a>
-              <div className={styles.testimonialContent}>
-                <p className={styles.text}>{testimonial.text}</p>
-                <footer className={styles.author}>{testimonial.author}</footer>
-              </div>
-            </blockquote>
-          </div>
-        ))}
-      </Slider>
+    <section className="bg-muted/40 py-16">
+      <div className="mx-auto max-w-3xl px-12">
+        <h2 className="mb-8 text-center font-heading text-3xl font-bold tracking-tight">
+          What students say
+        </h2>
+        <Carousel opts={{ loop: true }} plugins={[autoplay.current]}>
+          <CarouselContent>
+            {testimonials.map((testimonial) => (
+              <CarouselItem key={testimonial.id}>
+                <Card>
+                  <CardContent className="flex flex-col items-center gap-4 text-center">
+                    <a href={testimonial.linkedin} target="_blank" rel="noopener noreferrer">
+                      <Avatar size="lg" className="size-16">
+                        <AvatarImage src={testimonial.image} alt={testimonial.author} />
+                        <AvatarFallback>{testimonial.author.slice(0, 2)}</AvatarFallback>
+                      </Avatar>
+                    </a>
+                    <blockquote className="text-lg text-balance">“{testimonial.text}”</blockquote>
+                    <p className="text-sm font-medium text-muted-foreground">
+                      {testimonial.author}
+                    </p>
+                  </CardContent>
+                </Card>
+              </CarouselItem>
+            ))}
+          </CarouselContent>
+          <CarouselPrevious />
+          <CarouselNext />
+        </Carousel>
+      </div>
     </section>
   );
 };

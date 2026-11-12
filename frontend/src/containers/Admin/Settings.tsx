@@ -1,15 +1,28 @@
 import React from "react";
+import { RiMoonLine, RiSunLine } from "@remixicon/react";
+import { Button } from "@/components/ui/button";
+import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { useTheme } from "./ThemeContext";
 
 const Settings = () => {
-  const { toggleTheme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
 
   return (
-    <div>
-      <h2>Settings</h2>
-      <button onClick={toggleTheme}>Toggle Theme</button>
+    <Field orientation="horizontal">
+      <FieldContent>
+        <FieldLabel>Theme</FieldLabel>
+        <FieldDescription>Currently using the {theme} theme.</FieldDescription>
+      </FieldContent>
+      <Button variant="outline" onClick={toggleTheme}>
+        {theme === "dark" ? (
+          <RiSunLine data-icon="inline-start" />
+        ) : (
+          <RiMoonLine data-icon="inline-start" />
+        )}
+        Toggle Theme
+      </Button>
       {/* Additional settings can be added here */}
-    </div>
+    </Field>
   );
 };
 

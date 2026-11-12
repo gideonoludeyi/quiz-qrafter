@@ -1,28 +1,29 @@
-import React from "react";
 import { Link } from "react-router-dom";
-import styles from "./benefit.module.css"; // Import the CSS module
+import { RiCheckLine } from "@remixicon/react";
+import { Button } from "@/components/ui/button";
 import benefit from "../../assets/benefits.png";
+
+const benefits = ["Efficient Learning", "Personalized Assessments", "Immediate Feedback"];
 
 const Benefit = () => {
   return (
-    <>
-      <div>
-        <h2 className={styles.heading}>Unlock your potential</h2>
-        <ul className={styles.subheadingContainer}>
-          <li className={styles.subheading}>● Efficient Learning</li>
-          <li className={styles.subheading}>● Personalized Assessments</li>
-          <li className={styles.subheading}>● Immediate Feedback</li>
+    <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 md:grid-cols-2">
+      <div className="flex flex-col items-start gap-6">
+        <h2 className="font-heading text-3xl font-bold tracking-tight">Unlock your potential</h2>
+        <ul className="flex flex-col gap-3">
+          {benefits.map((item) => (
+            <li key={item} className="flex items-center gap-2 text-muted-foreground">
+              <RiCheckLine className="size-5 text-foreground" />
+              {item}
+            </li>
+          ))}
         </ul>
-        <div className={styles.buttonContainer}>
-          <Link to="/signup" className={styles.joinButton}>
-            Register Today
-          </Link>
-        </div>
-        <div className={styles.imageContainer}>
-          <img src={benefit} alt="benefits" className={styles.benefits} />
-        </div>
+        <Button size="lg" nativeButton={false} render={<Link to="/signup" />}>
+          Register Today
+        </Button>
       </div>
-    </>
+      <img src={benefit} alt="benefits" className="w-full rounded-2xl" />
+    </section>
   );
 };
 
