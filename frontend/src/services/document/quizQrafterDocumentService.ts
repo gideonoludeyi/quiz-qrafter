@@ -7,17 +7,14 @@ export class QuizQrafterDocumentService implements DocumentService {
     const formData = new FormData();
     formData.append("file", file);
 
-    const response = await fetch(
-      new URL("/api/v1/document/upload", this.baseURL),
-      {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-        headers: {
-          Accept: "application/json",
-        },
+    const response = await fetch(new URL("/api/v1/document/upload", this.baseURL), {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+      headers: {
+        Accept: "application/json",
       },
-    );
+    });
 
     if (!response.ok) {
       throw new Error("Failed to upload file");

@@ -13,8 +13,7 @@ const Home = () => {
   const [features, setFeatures] = useState([
     {
       title: "Interactive Quizzes",
-      description:
-        "Take quizzes to test your knowledge and learn new concepts.",
+      description: "Take quizzes to test your knowledge and learn new concepts.",
       imageUrl: image1,
     },
     {
@@ -24,8 +23,7 @@ const Home = () => {
     },
     {
       title: "Expert Teachers",
-      description:
-        "Learn from industry experts who are passionate about teaching.",
+      description: "Learn from industry experts who are passionate about teaching.",
       imageUrl: image1,
     },
     {
@@ -50,16 +48,14 @@ const Home = () => {
           </button>
         </div>
         <div className={styles.featuresGrid}>
-          {features
-            .slice(0, showAllFeatures ? features.length : 2)
-            .map((feature, index) => (
-              <Feature
-                key={index}
-                title={feature.title}
-                description={feature.description}
-                imageUrl={feature.imageUrl}
-              />            
-            ))}
+          {features.slice(0, showAllFeatures ? features.length : 2).map((feature, index) => (
+            <Feature
+              key={index}
+              title={feature.title}
+              description={feature.description}
+              imageUrl={feature.imageUrl}
+            />
+          ))}
         </div>
       </section>
       <Benefit />

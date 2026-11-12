@@ -1,24 +1,24 @@
-import React, { useState } from 'react';
-import { useAuth } from '../../services/auth';
-import styles from './dashboard.module.css';
-import Sidebar from '../../components/Sidebar/Sidebar';
-import sbStyles from '../../components/Sidebar/sidebar.module.css';
+import React, { useState } from "react";
+import { useAuth } from "../../services/auth";
+import styles from "./dashboard.module.css";
+import Sidebar from "../../components/Sidebar/Sidebar";
+import sbStyles from "../../components/Sidebar/sidebar.module.css";
 import Logo from "../../assets/quiz_qrafter_logo_dark.svg";
-import { useTheme } from '../../containers/Admin/ThemeContext';
-import Quiz from '../../containers/Admin/Quiz';
-import Settings from '../../containers/Admin/Settings';
+import { useTheme } from "../../containers/Admin/ThemeContext";
+import Quiz from "../../containers/Admin/Quiz";
+import Settings from "../../containers/Admin/Settings";
 
 const Dashboard: React.FC = () => {
   const { user, signOut } = useAuth();
   const themeColors = {
-    light: '#7a84f9',
-    dark: '#808080'
+    light: "#7a84f9",
+    dark: "#808080",
   };
 
-  const { theme} = useTheme();
+  const { theme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const currentColor = themeColors[theme];
-  const [activeMenu, setActiveMenu] = useState<'quiz' | 'settings'>('quiz');
+  const [activeMenu, setActiveMenu] = useState<"quiz" | "settings">("quiz");
   const [showSettings, setShowSettings] = useState(false);
   const toggleSettings = () => {
     setShowSettings(!showSettings);
@@ -40,7 +40,6 @@ const Dashboard: React.FC = () => {
             <button onClick={toggleSidebar} className={styles.menuButton}>
               ☰
             </button>
-
           </div>
           <img src={Logo} alt="Quiz Qrafter" className={styles.dashboardLogo} />
           <div className={styles.headerContent}>
@@ -51,33 +50,34 @@ const Dashboard: React.FC = () => {
           </div>
         </header>
         <div className={styles.mainContent}>
-          <div className={`${sbStyles.sidebar} ${sidebarOpen ? sbStyles.open : ''}`}>
-            <Sidebar isOpen={sidebarOpen} closeSidebar={toggleSidebar} activeMenu={activeMenu} setActiveMenu={setActiveMenu} toggleSettings={toggleSettings} />
+          <div className={`${sbStyles.sidebar} ${sidebarOpen ? sbStyles.open : ""}`}>
+            <Sidebar
+              isOpen={sidebarOpen}
+              closeSidebar={toggleSidebar}
+              activeMenu={activeMenu}
+              setActiveMenu={setActiveMenu}
+              toggleSettings={toggleSettings}
+            />
           </div>
-          <main className={`${styles.content} ${sidebarOpen ? styles.contentWithSidebar : ''}`}>
-            {activeMenu === 'quiz' ? (
-              <Quiz />
-            ) : (
-              null
-            )}
+          <main className={`${styles.content} ${sidebarOpen ? styles.contentWithSidebar : ""}`}>
+            {activeMenu === "quiz" ? <Quiz /> : null}
           </main>
         </div>
         {showSettings && (
-  <div className={styles.settingsModal}>
-    <div className={styles.settingsModalHeader}>
-    
-      <button
-        className={styles.settingsModalCloseButton}
-        onClick={() => setShowSettings(false)}
-      >
-        ×
-      </button>
-    </div>
-    <div className={styles.settingsModalContent}>
-      <Settings />
-    </div>
-  </div>
-)}
+          <div className={styles.settingsModal}>
+            <div className={styles.settingsModalHeader}>
+              <button
+                className={styles.settingsModalCloseButton}
+                onClick={() => setShowSettings(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className={styles.settingsModalContent}>
+              <Settings />
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

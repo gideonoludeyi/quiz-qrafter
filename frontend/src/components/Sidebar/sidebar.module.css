@@ -8,33 +8,33 @@
     left: 0;
     z-index: 1000;
     padding-top: 30px;
-  }
-  
-  .open {
+}
+
+.open {
     transform: translateX(0);
-  }  
-  
-  .nav {
+}
+
+.nav {
     padding: 1rem;
-  }
-  
-  .nav ul {
+}
+
+.nav ul {
     list-style: none;
     padding: 0;
-  }
-  
-  .nav li a {
+}
+
+.nav li a {
     color: white;
     text-decoration: none;
-  }
-  
-  @media (max-width: 768px) {
+}
+
+@media (max-width: 768px) {
     .sidebar {
-      width: 200px;
+        width: 200px;
     }
-  }
-  
-  .closeButton {
+}
+
+.closeButton {
     border: none;
     font-size: 1.5rem;
     position: absolute;
@@ -42,19 +42,19 @@
     right: 0;
     padding: 0.5rem 1rem;
     cursor: pointer;
-  }
+}
 
-  .nav li {
+.nav li {
     padding: 0.5rem 0;
     cursor: pointer;
-  }
-  
-  .nav li.active {
+}
+
+.nav li.active {
     border-radius: 20px;
     border-color: black;
-  }
-  
-  .nav li button {
+}
+
+.nav li button {
     background: none;
     border: none;
     color: inherit;
@@ -64,19 +64,18 @@
     cursor: pointer;
     display: block;
     transition: background-color 0.3s ease;
-  }
-  
-  .nav li.active button {
+}
+
+.nav li.active button {
     background-color: #4a4e69;
     color: #f2e9e4;
     border-radius: 4px;
-  }
-  
-  .nav li:not(.active) button:hover {
+}
+
+.nav li:not(.active) button:hover {
     background-color: rgba(255, 255, 255, 0.1);
-  }
-  
-  .nav li button:hover {
+}
+
+.nav li button:hover {
     background-color: rgba(255, 255, 255, 0.1);
-  }
-  
+}

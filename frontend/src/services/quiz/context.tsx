@@ -44,13 +44,10 @@ export function QuizProvider({ service, children }: QuizProviderProps) {
       const file = await service.generatePDF(filename);
       // Create blob link to download
       const url = URL.createObjectURL(file);
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.hidden = true;
       link.href = url;
-      link.setAttribute(
-        'download',
-        "quiz.pdf",
-      );
+      link.setAttribute("download", "quiz.pdf");
 
       // Append to html link element page
       document.body.appendChild(link);
@@ -86,16 +83,13 @@ export function QuizProvider({ service, children }: QuizProviderProps) {
   const downloadPDF = async (filename: string) => {
     setLoading(true);
     try {
-      const file = await service.downloadPDF(filename);;
+      const file = await service.downloadPDF(filename);
       // Create blob link to download
       const url = URL.createObjectURL(file);
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.hidden = true;
       link.href = url;
-      link.setAttribute(
-        'download',
-        "quiz.pdf",
-      );
+      link.setAttribute("download", "quiz.pdf");
 
       // Append to html link element page
       document.body.appendChild(link);
@@ -115,7 +109,9 @@ export function QuizProvider({ service, children }: QuizProviderProps) {
   };
 
   return (
-    <QuizContext.Provider value={{ markdown, loading, error, generateMD, generatePDF, downloadMD, downloadPDF }}>
+    <QuizContext.Provider
+      value={{ markdown, loading, error, generateMD, generatePDF, downloadMD, downloadPDF }}
+    >
       {children}
     </QuizContext.Provider>
   );

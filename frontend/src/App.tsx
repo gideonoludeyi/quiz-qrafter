@@ -1,9 +1,4 @@
-import {
-  Navigate,
-  Route,
-  BrowserRouter as Router,
-  Routes,
-} from "react-router-dom";
+import { Navigate, Route, BrowserRouter as Router, Routes } from "react-router-dom";
 import "./App.css";
 import Login from "./containers/Auth/Login";
 import SignUp from "./containers/Auth/SignUp";
@@ -23,11 +18,8 @@ function App() {
         <Route path="/signup" element={<SignUp />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/update-password" element={<UpdatePassword />} />
-        
-        <Route
-          path="/login"
-          element={authenticated ? <Navigate to="/dashboard" /> : <Login />}
-        />
+
+        <Route path="/login" element={authenticated ? <Navigate to="/dashboard" /> : <Login />} />
 
         {/* Redirect to dashboard if user is logged in */}
         <Route

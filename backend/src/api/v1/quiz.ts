@@ -139,10 +139,7 @@ router.get("/download/:filename", restrict, async (req, res) => {
       return res.sendStatus(400 /* Bad Request */);
     }
     const fname = dbQuiz.urlPdf.replace("gs://quizqrafter-quizzes/", ""); // eg. u1-note.pdf-quiz.pdf
-    const [pdfQuiz] = await storage
-      .bucket("quizqrafter-quizzes")
-      .file(fname)
-      .download();
+    const [pdfQuiz] = await storage.bucket("quizqrafter-quizzes").file(fname).download();
     res.setHeader("Content-disposition", "attachment; filename=quiz.pdf");
     res.setHeader("Content-type", "application/pdf");
     res.status(200 /* OK */).send(pdfQuiz);
@@ -185,10 +182,7 @@ router.delete("/delete/:filename", restrict, async (req, res) => {
       return res.sendStatus(400 /* Bad Request */);
     }
     const fname = dbQuiz.urlPdf.replace("gs://quizqrafter-quizzes/", ""); // eg. u1-note.pdf-quiz.pdf
-    const [response] = await storage
-      .bucket("quizqrafter-quizzes")
-      .file(fname)
-      .delete();
+    const [response] = await storage.bucket("quizqrafter-quizzes").file(fname).delete();
 
     await prisma.quiz.delete({
       where: {

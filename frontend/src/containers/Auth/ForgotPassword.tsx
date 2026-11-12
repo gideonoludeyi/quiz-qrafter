@@ -8,18 +8,18 @@ const ForgotPassword = () => {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [isValid, setValidation] = useState(false);
-  const [error,setError] = useState<Record<string, string>>({}); 
+  const [error, setError] = useState<Record<string, string>>({});
   const navigate = useNavigate();
-  
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
-        // Assuming there's a function in useAuth or another service to request password reset
-        // await useAuth().requestPasswordReset(email);
-        setMessage("If an account exists for this email, a password reset link has been sent.");
-        setTimeout(() => navigate("/login"), 5000); // Redirect to login after 5 seconds
-      } catch (error) {
-        setMessage("There was an error processing your request. Please try again later.");
+      // Assuming there's a function in useAuth or another service to request password reset
+      // await useAuth().requestPasswordReset(email);
+      setMessage("If an account exists for this email, a password reset link has been sent.");
+      setTimeout(() => navigate("/login"), 5000); // Redirect to login after 5 seconds
+    } catch (error) {
+      setMessage("There was an error processing your request. Please try again later.");
     }
   };
 
@@ -28,7 +28,6 @@ const ForgotPassword = () => {
     const regex = /\S+@\S+\.\S+/;
     return regex.test(email);
   };
-
 
   const checkValid = () => {
     const newError: Record<string, string> = {};
@@ -45,10 +44,10 @@ const ForgotPassword = () => {
     // return isValid;
   };
 
-  const handleEmail = (email: string)=> {
+  const handleEmail = (email: string) => {
     setEmail(email);
     checkValid();
-  }
+  };
 
   return (
     <>
@@ -61,7 +60,6 @@ const ForgotPassword = () => {
         <div className={styles.authCard}>
           <h1 className={styles.authTitle}>Forgot Password</h1>
           <form action="" onSubmit={handleSubmit}>
-          
             <input
               type="email"
               className={styles.authInput}
@@ -70,11 +68,13 @@ const ForgotPassword = () => {
               onChange={(event) => handleEmail(event.target.value)}
             />
             {error && <p className={styles.authError}>{error.email}</p>}
-            <button 
-            type="submit" 
-            className={`${styles.authButton} ${isValid ? styles.authButton : styles.disabledButton}`}
-            disabled={!isValid}
-            >Send Reset Link</button>
+            <button
+              type="submit"
+              className={`${styles.authButton} ${isValid ? styles.authButton : styles.disabledButton}`}
+              disabled={!isValid}
+            >
+              Send Reset Link
+            </button>
           </form>
           {message && <p className={styles.authMessage}>{message}</p>}
           <footer className={styles.authFooter}>

@@ -1,10 +1,5 @@
 import bcrypt from "bcrypt";
-import {
-  type NextFunction,
-  type Request,
-  type Response,
-  Router,
-} from "express";
+import { type NextFunction, type Request, type Response, Router } from "express";
 import prisma from "../../database";
 
 const router = Router();
@@ -111,11 +106,7 @@ router.get("/info", restrict, async (req, res) => {
   }
 });
 
-export function restrict(
-  request: Request,
-  response: Response,
-  next: NextFunction,
-) {
+export function restrict(request: Request, response: Response, next: NextFunction) {
   // @ts-expect-error
   if (request.session.userId) {
     return next();
@@ -128,10 +119,7 @@ async function hashPassword(plainPassword: string): Promise<string> {
   return await bcrypt.hash(plainPassword, 10);
 }
 
-async function verifyPassword(
-  plainPassword: string,
-  hashedPassword: string,
-): Promise<boolean> {
+async function verifyPassword(plainPassword: string, hashedPassword: string): Promise<boolean> {
   return await bcrypt.compare(plainPassword, hashedPassword);
 }
 

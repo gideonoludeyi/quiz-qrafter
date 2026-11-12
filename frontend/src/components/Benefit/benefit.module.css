@@ -1,14 +1,14 @@
-.benefits{
-  position: absolute;
-  bottom: 0;
-  left: 0; 
-  width: 100%; 
-  z-index: 0; 
+.benefits {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    z-index: 0;
 }
 
-.imageContainer{
-  position: relative;
-  margin-top: 25rem;
+.imageContainer {
+    position: relative;
+    margin-top: 25rem;
 }
 
 .heading {
@@ -17,9 +17,9 @@
     font-size: 3rem;
     color: #333;
     margin-top: 15rem;
-  }
+}
 
-.subheadingContainer{
+.subheadingContainer {
     display: grid;
     justify-content: end;
     align-content: left;
@@ -27,7 +27,7 @@
     margin-right: 5rem;
 }
 
-.subheading{
+.subheading {
     display: block;
     margin-top: 2rem;
     text-align: right;
@@ -37,58 +37,57 @@
 }
 
 .buttonContainer {
-  display: flex;
-  justify-content: flex-end;  
-  width: 100%; 
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
 }
 
 .joinButton {
-  position: relative;
-  padding: 1rem 2rem;  
-  background-color: #000000;
-  border: none;
-  border-radius: 4rem;
-  color: white;
-  text-decoration: none;
-  font-size: 1rem;
-  transition: background-color 0.3s ease;
-  flex-grow: 0; 
-  flex-shrink: 0;
-  margin-right: 6rem;
-  margin-top: 2rem;
-  margin-bottom: 3rem;
-  z-index: 1;
+    position: relative;
+    padding: 1rem 2rem;
+    background-color: #000000;
+    border: none;
+    border-radius: 4rem;
+    color: white;
+    text-decoration: none;
+    font-size: 1rem;
+    transition: background-color 0.3s ease;
+    flex-grow: 0;
+    flex-shrink: 0;
+    margin-right: 6rem;
+    margin-top: 2rem;
+    margin-bottom: 3rem;
+    z-index: 1;
 }
 
 .joinButton:hover {
-  background-color: #9fbaff;
+    background-color: #9fbaff;
 }
 
 @media (max-width: 768px) {
-    
     .heading {
-      margin-top: 5rem;
-      margin-right: 1.2rem;
-      font-size: 1.7rem;
-      text-align: right;
+        margin-top: 5rem;
+        margin-right: 1.2rem;
+        font-size: 1.7rem;
+        text-align: right;
     }
-    .subheadingContainer{
-      margin-top: 2rem;
-      margin-right: 3rem;
+    .subheadingContainer {
+        margin-top: 2rem;
+        margin-right: 3rem;
     }
-    .subheading{
+    .subheading {
         margin-top: 0.8rem;
         font-size: 0.8rem;
     }
-    .imageContainer{
-      margin-top: 9rem;
+    .imageContainer {
+        margin-top: 9rem;
     }
 
-    .joinButton{
-      padding: 0.5rem 1.5rem;
-      border-radius: 2rem; 
-      font-size: 0.8rem; 
-      margin-right: 2rem;
-      margin-bottom: 1rem;
+    .joinButton {
+        padding: 0.5rem 1.5rem;
+        border-radius: 2rem;
+        font-size: 0.8rem;
+        margin-right: 2rem;
+        margin-bottom: 1rem;
     }
 }

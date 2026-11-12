@@ -22,9 +22,7 @@ const authService = new LocalStorageAuthService();
 const documentService = new LocalStorageDocumentService(authService);
 const quizService = new QuizQrafterQuizService(apiURL);
 
-const root = ReactDOM.createRoot(
-  document.getElementById("root") as HTMLElement,
-);
+const root = ReactDOM.createRoot(document.getElementById("root") as HTMLElement);
 root.render(
   <React.StrictMode>
     <AuthProvider service={authService}>

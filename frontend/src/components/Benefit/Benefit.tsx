@@ -6,22 +6,22 @@ import benefit from "../../assets/benefits.png";
 const Benefit = () => {
   return (
     <>
-    <div>
+      <div>
         <h2 className={styles.heading}>Unlock your potential</h2>
         <ul className={styles.subheadingContainer}>
-            <li className={styles.subheading}>●  Efficient Learning</li>
-            <li className={styles.subheading}>●  Personalized Assessments</li>
-            <li className={styles.subheading}>●  Immediate Feedback</li>
+          <li className={styles.subheading}>● Efficient Learning</li>
+          <li className={styles.subheading}>● Personalized Assessments</li>
+          <li className={styles.subheading}>● Immediate Feedback</li>
         </ul>
-        <div className= {styles.buttonContainer}>
-        <Link to="/signup" className={styles.joinButton}>
-        Register Today
-      </Link>
-      </div>
-      <div className= {styles.imageContainer}>
-        <img src={benefit} alt="benefits" className ={styles.benefits} />
+        <div className={styles.buttonContainer}>
+          <Link to="/signup" className={styles.joinButton}>
+            Register Today
+          </Link>
         </div>
-    </div>
+        <div className={styles.imageContainer}>
+          <img src={benefit} alt="benefits" className={styles.benefits} />
+        </div>
+      </div>
     </>
   );
 };

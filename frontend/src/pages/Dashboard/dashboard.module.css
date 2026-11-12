@@ -1,8 +1,7 @@
 .dashboardLogo {
-    height: auto; 
+    height: auto;
     max-width: 100px;
 }
-
 
 .header {
     display: flex;
@@ -15,10 +14,11 @@
     width: 100%;
     top: 0;
     z-index: 2;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, .1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.logoMenu, .headerContent {
+.logoMenu,
+.headerContent {
     display: flex;
     align-items: center;
 }
@@ -49,10 +49,11 @@
     border: none;
     border-radius: 20px;
     cursor: pointer;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    transition:
+        transform 0.3s ease,
+        box-shadow 0.3s ease;
     letter-spacing: 1px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    
 }
 
 .logoutButton:hover,
@@ -68,7 +69,6 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-
 .mainContent {
     padding-top: 60px;
     display: flex;
@@ -81,7 +81,6 @@
     margin-left: 0;
     transition: margin-left 0.3s;
 }
-
 
 .contentWithSidebar {
     margin-left: 250px;
@@ -115,19 +114,18 @@
     border-radius: 10px; /* Rounded corners */
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Soft shadow for depth */
     border: 1px solid #e1e1e1; /* Slight border */
-  }
-  
-  .settingsModalHeader {
+}
+
+.settingsModalHeader {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 20px; /* Space between header and content */
     padding-bottom: 10px;
     border-bottom: 1px solid #e1e1e1; /* Separator */
-  }
- 
-  
-  .settingsModalCloseButton {
+}
+
+.settingsModalCloseButton {
     position: fixed;
     margin-left: 380px;
     background: none;
@@ -135,44 +133,44 @@
     color: #333;
     font-size: 1.5rem;
     cursor: pointer;
-  }
-  
-  .settingsModalContent {
+}
+
+.settingsModalContent {
     color: #333; /* Matching the dark theme text color */
-  }
-  
-  .settingsModalContent label {
+}
+
+.settingsModalContent label {
     display: block;
-    margin-bottom: .5rem;
+    margin-bottom: 0.5rem;
     font-weight: bold;
-  }
-  
-  .settingsModalContent input,
-  .settingsModalContent select,
-  .settingsModalContent button {
+}
+
+.settingsModalContent input,
+.settingsModalContent select,
+.settingsModalContent button {
     width: 100%;
     padding: 8px;
     margin-bottom: 1rem; /* Space between form elements */
     border-radius: 4px;
     border: 1px solid #ccc; /* Light border for inputs */
     box-sizing: border-box; /* Box-sizing property */
-  }
-  
-  .settingsModalContent button {
+}
+
+.settingsModalContent button {
     background-color: #7a84f9; /* Button color matching your theme */
     color: white;
     border: none;
     cursor: pointer;
-  }
-  
-  .settingsModalContent button:hover {
+}
+
+.settingsModalContent button:hover {
     background-color: #696fdd; /* Slightly darker on hover */
-  }
-  
-  /* You might want to add media queries to ensure the modal looks good on mobile */
-  @media (max-width: 768px) {
+}
+
+/* You might want to add media queries to ensure the modal looks good on mobile */
+@media (max-width: 768px) {
     .settingsModal {
-      width: 90%;
-      max-width: none; /* Full width on smaller screens */
+        width: 90%;
+        max-width: none; /* Full width on smaller screens */
     }
-  }
+}

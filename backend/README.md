@@ -37,7 +37,6 @@ $ docker run --rm --name qqredis -d -p 6379:6379 redis:7.0-alpine
 
 2. Set the `REDIS_URL` variable in `.env` to `redis://localhost:6379`
 
-
 This will start up a redis server in Docker and will be used as a session storage for tracking user login sessions.
 This step is optional during development because the server will use an in-memory storage by default.
 

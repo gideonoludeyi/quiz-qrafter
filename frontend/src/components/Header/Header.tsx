@@ -48,11 +48,7 @@ const Header = () => {
         <div className={styles.mobileMenu}>
           <div className={styles.mobileMenuHeader}>
             <h1 className={styles.logoMobile}>
-              <Link
-                to="/"
-                className={styles.mobileLogoLink}
-                onClick={handleLogoClick}
-              >
+              <Link to="/" className={styles.mobileLogoLink} onClick={handleLogoClick}>
                 Quiz Qrafter
               </Link>
             </h1>
@@ -68,18 +64,10 @@ const Header = () => {
             >
               Home
             </Link> */}
-            <Link
-              to="/login"
-              className={styles.mobileMenuItem}
-              onClick={toggleMobileMenu}
-            >
+            <Link to="/login" className={styles.mobileMenuItem} onClick={toggleMobileMenu}>
               Log in
             </Link>
-            <Link
-              to="/signup"
-              className={styles.mobileMenuItem}
-              onClick={toggleMobileMenu}
-            >
+            <Link to="/signup" className={styles.mobileMenuItem} onClick={toggleMobileMenu}>
               Sign up
             </Link>
             {/* Add other navigation links as needed */}

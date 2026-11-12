@@ -57,16 +57,8 @@ const Testimonials = () => {
           <div key={testimonial.id} className={styles.slide}>
             <blockquote className={styles.testimonial}>
               {/* Only the image is wrapped with <a> tag */}
-              <a
-                href={testimonial.linkedin}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <img
-                  src={testimonial.image}
-                  alt=""
-                  className={styles.testimonialImage}
-                />
+              <a href={testimonial.linkedin} target="_blank" rel="noopener noreferrer">
+                <img src={testimonial.image} alt="" className={styles.testimonialImage} />
               </a>
               <div className={styles.testimonialContent}>
                 <p className={styles.text}>{testimonial.text}</p>

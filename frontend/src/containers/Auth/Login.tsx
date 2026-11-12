@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import Logo from "../../assets/quiz_qrafter_logo_dark.svg";
 import { useAuth } from "../../services/auth";
 import styles from "./auth.module.css";
@@ -13,7 +13,6 @@ const Login = () => {
   const [error, setError] = useState<Record<string, string>>({});
   const [isValid, setValidation] = useState(false);
   const navigate = useNavigate();
-
 
   useEffect(() => {
     if (authenticated) {
@@ -52,12 +51,12 @@ const Login = () => {
   const handleEmail = (email: string) => {
     setEmail(email);
     checkValid();
-  }
+  };
 
   const handlePassword = (password: string) => {
     setPassword(password);
     checkValid();
-  }
+  };
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -68,23 +67,25 @@ const Login = () => {
         login(email, password);
         setValidation(true);
         setError({});
-
       } catch (error: any) {
         setError({ general: error.message });
       }
     }
   };
 
-  const notify = () => toast.info("Reach out to the Quizqrafter team at quizqrafter@gmail.com to reset your password.", {
-    position: "top-center",
-    autoClose: 5000,
-    hideProgressBar: false,
-    closeOnClick: true,
-    pauseOnHover: true,
-    draggable: true,
-    progress: undefined,
-  });
-
+  const notify = () =>
+    toast.info(
+      "Reach out to the Quizqrafter team at quizqrafter@gmail.com to reset your password.",
+      {
+        position: "top-center",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        progress: undefined,
+      },
+    );
 
   return (
     <>
@@ -114,17 +115,24 @@ const Login = () => {
             {error.password && <p className={styles.authError}>{error.password}</p>}
             <button
               type="submit"
-              className={`${styles.authButton} ${isValid ? '' : styles.disabledButton}`}
+              className={`${styles.authButton} ${isValid ? "" : styles.disabledButton}`}
               disabled={!isValid}
             >
               Log in
             </button>
           </form>
-          <button onClick={notify} className={styles.authToggle} style={{ background: 'none', border: 'none', color: '#007bff' }}>
+          <button
+            onClick={notify}
+            className={styles.authToggle}
+            style={{ background: "none", border: "none", color: "#007bff" }}
+          >
             Forgot Password
           </button>
           <footer className={styles.authFooter}>
-            Don't have an account? <Link to="/signup" className={styles.authToggle}>Sign up</Link>
+            Don't have an account?{" "}
+            <Link to="/signup" className={styles.authToggle}>
+              Sign up
+            </Link>
           </footer>
         </div>
         <footer className={styles.authTermPolicy}>

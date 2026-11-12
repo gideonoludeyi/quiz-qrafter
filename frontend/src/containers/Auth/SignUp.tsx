@@ -9,19 +9,18 @@ const SignUp = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullname, setFullname] = useState("");
-  const [firstname,setFirstname] = useState("");
-  const [lastname,setLastname] = useState("");
-  const [error,setError] = useState<Record<string, string>>({}); 
+  const [firstname, setFirstname] = useState("");
+  const [lastname, setLastname] = useState("");
+  const [error, setError] = useState<Record<string, string>>({});
   const navigate = useNavigate();
   const [isValid, setValidation] = useState(false);
-   
 
   useEffect(() => {
     setFullname(`${firstname} ${lastname}`);
   }, [firstname, lastname]);
 
   const checkPwd = (password: string): boolean => {
-    const regex =/^(?=.*[A-Z]).{8,}$/;
+    const regex = /^(?=.*[A-Z]).{8,}$/;
     return regex.test(password);
   };
 
@@ -57,43 +56,41 @@ const SignUp = () => {
     // return isValid;
   };
 
-  const handleFirstName = (firstName: string)=> {
+  const handleFirstName = (firstName: string) => {
     setFirstname(firstName);
     checkValid();
-  }
+  };
 
-  const handleLastName = (lastName: string)=> {
+  const handleLastName = (lastName: string) => {
     setLastname(lastName);
     checkValid();
-  }
+  };
 
-  const handleEmail = (email: string)=> {
+  const handleEmail = (email: string) => {
     setEmail(email);
     checkValid();
-  }
+  };
 
   const handlePassword = (password: string) => {
     setPassword(password);
     checkValid();
-  }
+  };
 
   const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     checkValid();
 
-    if(isValid){
+    if (isValid) {
       try {
         signUp(email, password, fullname);
         setValidation(true);
         navigate("/login", { replace: true });
         setError({});
-
-      } catch (error:any) {
-        setError({ general: error.message});
+      } catch (error: any) {
+        setError({ general: error.message });
       }
     }
   };
-
 
   return (
     <>
@@ -106,13 +103,13 @@ const SignUp = () => {
         <div className={styles.authCard}>
           <h1 className={styles.authTitle}>Get started with Quiz Qrafter</h1>
 
-          <form action ="" onSubmit = {handleSignUp}>
+          <form action="" onSubmit={handleSignUp}>
             <input
               type="text"
               className={styles.authInput}
               placeholder="First Name"
               onChange={(event) => handleFirstName(event.target.value)}
-              value = {firstname}
+              value={firstname}
             />
 
             {error && <p className={styles.authError}>{error.firstname}</p>}
@@ -121,7 +118,7 @@ const SignUp = () => {
               className={styles.authInput}
               placeholder="Last Name"
               onChange={(event) => handleLastName(event.target.value)}
-              value = {lastname}
+              value={lastname}
             />
 
             {error && <p className={styles.authError}>{error.lastname}</p>}
@@ -130,7 +127,7 @@ const SignUp = () => {
               className={styles.authInput}
               placeholder="Email"
               onChange={(event) => handleEmail(event.target.value)}
-              value = {email}
+              value={email}
             />
 
             {error && <p className={styles.authError}>{error.email}</p>}
@@ -139,19 +136,18 @@ const SignUp = () => {
               className={styles.authInput}
               placeholder="Password"
               onChange={(event) => handlePassword(event.target.value)}
-              value = {password}        
+              value={password}
             />
 
             {error && <p className={styles.authError}>{error.password}</p>}
-            <button 
-            type="submit" 
-            className={`${styles.authButton} ${isValid ? styles.authButton : styles.disabledButton}`}
-            disabled={!isValid}
+            <button
+              type="submit"
+              className={`${styles.authButton} ${isValid ? styles.authButton : styles.disabledButton}`}
+              disabled={!isValid}
             >
               Sign up
             </button>
           </form>
-
 
           <footer className={styles.authFooter}>
             Already have an account?{" "}
@@ -160,10 +156,9 @@ const SignUp = () => {
             </Link>
           </footer>
         </div>
-        
+
         <div className={styles.authTermPolicy}>
-          By signing up, you agree to Quiz Qrafter's{" "}
-          <Link to="/terms">Terms of Use</Link> and{" "}
+          By signing up, you agree to Quiz Qrafter's <Link to="/terms">Terms of Use</Link> and{" "}
           <Link to="/privacy">Privacy Policy</Link>.
         </div>
       </div>
