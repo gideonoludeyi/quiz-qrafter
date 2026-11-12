@@ -1,28 +1,31 @@
 {
     "name": "quiz-qrafter",
     "version": "1.0.0",
+    "private": true,
     "description": "",
-    "private": "true",
-    "author": "",
-    "license": "ISC",
     "keywords": [],
-    "scripts": {
-        "start": "turbo run start",
-        "build": "turbo run build",
-        "dev": "turbo run dev",
-        "check-types": "turbo run check-types",
-        "format-and-lint": "biome check .",
-        "format-and-lint:fix": "biome check . --write"
-    },
-    "packageManager": "npm@11.6.0",
+    "license": "ISC",
+    "author": "",
     "workspaces": [
         "backend/",
         "frontend/"
     ],
-    "dependencies": {
-        "turbo": "^2.6.0"
+    "scripts": {
+        "start": "vp run --filter backend start",
+        "build": "vp run -r build",
+        "dev": "vp run -r --parallel dev",
+        "check-types": "vp run -r check-types",
+        "prepare": "vp config"
     },
     "devDependencies": {
-        "@biomejs/biome": "2.3.3"
-    }
+        "vite": "npm:@voidzero-dev/vite-plus-core@1.6.0",
+        "vite-plus": "1.6.0"
+    },
+    "overrides": {
+        "@vitejs/plugin-react-swc": {
+            "vite": "$vite"
+        },
+        "vite": "npm:@voidzero-dev/vite-plus-core@1.6.0"
+    },
+    "packageManager": "npm@11.6.0"
 }

@@ -5,8 +5,8 @@ services:
     runtime: node
     rootDir: .
     healthCheckPath: /healthz
-    buildCommand: npm ci && npm run build -- --filter=backend --env-mode=loose
-    startCommand: npm run start -- --filter=backend --env-mode=loose
+    buildCommand: npm ci && npx vp run --filter backend build
+    startCommand: npm run start --workspace=backend
     plan: free
     envVars:
       - key: SESSION_SECRET
@@ -39,10 +39,10 @@ services:
     name: quizqrafter
     runtime: static
     rootDir: .
-    buildCommand: npm ci && npm run build -- --filter=frontend --env-mode=loose
+    buildCommand: npm ci && npx vp run --filter frontend build
     staticPublishPath: frontend/dist/
     envVars:
-      - key: REACT_APP_API_URL
+      - key: VITE_API_URL
         fromService:
           type: web
           name: quizqrafter-api

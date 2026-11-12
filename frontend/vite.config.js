@@ -1,10 +1,10 @@
 // vite.config.js
 
 import react from "@vitejs/plugin-react-swc";
-import { defineConfig } from "vite";
+import { defineConfig, lazyPlugins } from "vite-plus";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: lazyPlugins(() => [react()]),
   server: {
     port: 3000,
     open: false,
