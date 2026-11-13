@@ -72,6 +72,18 @@ test("sign up, generate a quiz, edit it, and download the PDF", async ({ page })
     const content = await readFile(await download.path());
     expect(content.subarray(0, 5).toString()).toBe("%PDF-");
   });
+
+  await test.step("switch to dark theme from the nav bar", async () => {
+    const html = page.locator("html");
+    await expect(html).not.toHaveClass(/\bdark\b/);
+    await page.getByRole("button", { name: "Switch to dark theme" }).click();
+    await expect(html).toHaveClass(/\bdark\b/);
+    await expect(page.getByRole("button", { name: "Switch to light theme" })).toBeVisible();
+
+    // The choice is remembered across a reload.
+    await page.reload();
+    await expect(html).toHaveClass(/\bdark\b/);
+  });
 });
 
 test("a failed job shows why and can be retried", async ({ page }) => {
