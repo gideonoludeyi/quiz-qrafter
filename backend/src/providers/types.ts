@@ -1,4 +1,5 @@
 import type { QuizDraft } from "@quizqrafter/shared";
+import type { EmailSender } from "./email/types";
 
 // Turns an uploaded file (PDF, image, Word, text) into plain text.
 export interface TextExtractor {
@@ -23,4 +24,5 @@ export type Providers = {
   extractor: TextExtractor;
   blobs: BlobStore;
   generator: QuizGenerator;
+  email: EmailSender;
 };

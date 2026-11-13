@@ -74,12 +74,6 @@ const Login = () => {
     }
   };
 
-  const notify = () =>
-    toast.info(
-      "Reach out to the Quizqrafter team at quizqrafter@gmail.com to reset your password.",
-      { position: "top-center", duration: 5000 },
-    );
-
   return (
     <AuthLayout
       title="Welcome back"
@@ -114,7 +108,13 @@ const Login = () => {
           <Field data-invalid={!!error.password}>
             <div className="flex items-center">
               <FieldLabel htmlFor="password">Password</FieldLabel>
-              <Button type="button" variant="link" size="xs" className="ml-auto" onClick={notify}>
+              <Button
+                variant="link"
+                size="xs"
+                className="ml-auto"
+                nativeButton={false}
+                render={<Link to="/forgot-password" />}
+              >
                 Forgot password?
               </Button>
             </div>

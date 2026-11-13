@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "../../services/auth";
 import AuthLayout from "./AuthLayout";
 
 const UpdatePassword = () => {
@@ -15,12 +16,17 @@ const UpdatePassword = () => {
   const [errorConfirm, setErrorConfirm] = useState("");
   const [isValid, setValidation] = useState(false);
   const navigate = useNavigate();
+  const { resetPassword } = useAuth();
+  // Set when the emailed link is invalid or has expired (the API redirects with ?error=INVALID_TOKEN).
+  const [linkInvalid, setLinkInvalid] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
     const query = new URLSearchParams(location.search);
     const token = query.get("token");
-    if (token) {
+    if (query.get("error") === "INVALID_TOKEN") {
+      setLinkInvalid(true);
+    } else if (token) {
       setToken(token);
     } else {
       navigate("/login"); // Redirect if no token is found
@@ -60,24 +66,28 @@ const UpdatePassword = () => {
     if (!isValid) return;
 
     try {
-      const response = await fetch("/api/reset-password", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ token, newPassword }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to reset password");
-      }
-
+      await resetPassword(token, newPassword);
       setMessage("Your password has been successfully updated.");
       setTimeout(() => navigate("/login"), 3000); // Redirect to login after 3 seconds
     } catch (error) {
       setMessageBad("There was an error updating your password. Please try again.");
     }
   };
+
+  if (linkInvalid) {
+    return (
+      <AuthLayout title="Update Your Password">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-destructive">
+            This password reset link is invalid or has expired.
+          </p>
+          <Button nativeButton={false} render={<Link to="/forgot-password" />}>
+            Request a new link
+          </Button>
+        </div>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout title="Update Your Password">

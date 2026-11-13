@@ -2,6 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createAdaptorServer } from "@hono/node-server";
+import bcrypt from "bcrypt";
 import { PrismaClient } from "@prisma/client";
 import {
   DocumentSchema,
@@ -16,6 +17,7 @@ import { createApp } from "../src/app";
 import { loadConfig } from "../src/config";
 import { runNextJob } from "../src/core/jobs";
 import { createProviders } from "../src/providers";
+import type { ConsoleEmailSender } from "../src/providers/email/consoleEmailSender";
 import { testDatabaseUrl } from "./testDatabase";
 
 const NOTES = "Mitochondria are the powerhouse of the cell. They produce ATP.";
@@ -37,15 +39,26 @@ async function runJobs() {
   while (await runNextJob(deps));
 }
 
-// Signs up and logs in a new user, returning an agent that keeps the session cookie.
-async function loggedInAgent(email: string) {
+// better-auth only accepts sign-in requests from trusted origins (FRONTEND_URL).
+const ORIGIN = config.frontendOrigins[0];
+const email = deps.providers.email as ConsoleEmailSender;
+
+// Signs up a new user, returning an agent that keeps the session cookie (sign-up also signs in).
+async function loggedInAgent(address: string) {
   const agent = request.agent(app);
   await agent
-    .post("/api/v1/auth/signup")
-    .send({ email, password: PASSWORD, fullname: "Test User" })
+    .post("/api/auth/sign-up/email")
+    .set("Origin", ORIGIN)
+    .send({ name: "Test User", email: address, password: PASSWORD })
     .expect(200);
-  await agent.post("/api/v1/auth/login").send({ email, password: PASSWORD }).expect(200);
   return agent;
+}
+
+function signIn(agent: ReturnType<typeof request.agent>, address: string, password: string) {
+  return agent
+    .post("/api/auth/sign-in/email")
+    .set("Origin", ORIGIN)
+    .send({ email: address, password });
 }
 
 describe("quiz API", () => {
@@ -255,5 +268,88 @@ describe("quiz API", () => {
   it("deletes the quiz", async () => {
     await alice.delete(`/api/v1/quiz/${quiz.id}`).expect(204);
     await alice.get(`/api/v1/quiz/${quiz.id}`).expect(404);
+  });
+});
+
+describe("authentication", () => {
+  it("refuses a second account with the same email, with a message instead of a 500", async () => {
+    await loggedInAgent("dupe@example.com");
+    const again = await request(app)
+      .post("/api/auth/sign-up/email")
+      .set("Origin", ORIGIN)
+      .send({ name: "Dupe", email: "dupe@example.com", password: PASSWORD });
+    expect(again.status).toBeGreaterThanOrEqual(400);
+    expect(again.status).toBeLessThan(500);
+    expect(again.body.message).toMatch(/already exists/i);
+  });
+
+  it("signs in a user migrated from the old login, whose password is a bcrypt hash", async () => {
+    // The migration leaves existing users like this: a credential account holding their bcrypt hash.
+    const user = await prisma.user.create({
+      data: { email: "legacy@example.com", name: "Legacy" },
+    });
+    await prisma.account.create({
+      data: {
+        userId: user.id,
+        accountId: String(user.id),
+        providerId: "credential",
+        password: await bcrypt.hash("OldPassword1", 10),
+      },
+    });
+
+    const agent = request.agent(app);
+    await signIn(agent, "legacy@example.com", "OldPassword1").expect(200);
+    await agent.get("/api/v1/document").expect(200);
+    await signIn(request.agent(app), "legacy@example.com", "WrongPassword1").expect(401);
+  });
+
+  it("signing out ends access to the API", async () => {
+    const agent = await loggedInAgent("leaver@example.com");
+    await agent.get("/api/v1/document").expect(200);
+    await agent.post("/api/auth/sign-out").set("Origin", ORIGIN).send({}).expect(200);
+    await agent.get("/api/v1/document").expect(401);
+  });
+
+  it("resets a forgotten password through the emailed link", async () => {
+    await loggedInAgent("forgetful@example.com");
+    const redirectTo = `${ORIGIN}/update-password`;
+    const sentBefore = email.outbox.length;
+
+    await request(app)
+      .post("/api/auth/request-password-reset")
+      .set("Origin", ORIGIN)
+      .send({ email: "forgetful@example.com", redirectTo })
+      .expect(200);
+    const sent = email.outbox.slice(sentBefore);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ to: "forgetful@example.com", name: "Test User" });
+
+    // The emailed link goes to the API, which redirects to the frontend page with the token.
+    const link = new URL(sent[0].url);
+    const followed = await request(app).get(link.pathname + link.search);
+    expect(followed.status).toBe(302);
+    const landing = new URL(followed.headers.location);
+    expect(`${landing.origin}${landing.pathname}`).toBe(redirectTo);
+    const token = landing.searchParams.get("token");
+    expect(token).toBeTruthy();
+
+    await request(app)
+      .post("/api/auth/reset-password")
+      .set("Origin", ORIGIN)
+      .send({ newPassword: "NewPassword1", token })
+      .expect(200);
+
+    await signIn(request.agent(app), "forgetful@example.com", "NewPassword1").expect(200);
+    await signIn(request.agent(app), "forgetful@example.com", PASSWORD).expect(401);
+  });
+
+  it("answers a reset request for an unknown email the same way, without sending anything", async () => {
+    const sentBefore = email.outbox.length;
+    await request(app)
+      .post("/api/auth/request-password-reset")
+      .set("Origin", ORIGIN)
+      .send({ email: "nobody@example.com", redirectTo: `${ORIGIN}/update-password` })
+      .expect(200);
+    expect(email.outbox).toHaveLength(sentBefore);
   });
 });

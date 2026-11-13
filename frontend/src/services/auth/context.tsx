@@ -12,6 +12,9 @@ type AuthContextValue = {
   signUp: (email: string, password: string, fullname: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   signOut: () => void;
+  // Both reject with the reason when the request fails.
+  requestPasswordReset: (email: string, redirectTo: string) => Promise<void>;
+  resetPassword: (token: string, newPassword: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -39,7 +42,9 @@ export function AuthProvider({ service, children }: AuthProviderProps) {
     setLoading(true);
     return service
       .signUp({ email, password, fullname })
-      .then(() => {
+      .then((user) => {
+        // Signing up also signs the user in.
+        setUser(user);
         setError(null);
       })
       .catch((err) => {
@@ -92,6 +97,9 @@ export function AuthProvider({ service, children }: AuthProviderProps) {
         signUp,
         login,
         signOut,
+        requestPasswordReset: (email, redirectTo) =>
+          service.requestPasswordReset(email, redirectTo),
+        resetPassword: (token, newPassword) => service.resetPassword(token, newPassword),
       }}
       children={children}
     />

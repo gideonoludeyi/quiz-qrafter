@@ -15,6 +15,7 @@
         "@quizqrafter/shared": "*",
         "@remixicon/react": "^4.9.0",
         "@tailwindcss/vite": "^4.3.5",
+        "better-auth": "^1.7.22",
         "class-variance-authority": "^0.7.1",
         "cn": "^0.5.2",
         "embla-carousel-autoplay": "^8.6.0",

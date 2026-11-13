@@ -87,7 +87,7 @@ const SignUp = () => {
       try {
         await signUp(email, password, fullname);
         setValidation(true);
-        navigate("/login", { replace: true });
+        navigate("/dashboard", { replace: true });
         setError({});
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not sign up.");

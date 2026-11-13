@@ -31,10 +31,7 @@ export function parseId(value: string): number {
 }
 
 // Reads a JSON body and validates it; malformed JSON or a schema mismatch becomes a 400.
-export async function parseJson<T extends z.ZodTypeAny>(
-  c: Context,
-  schema: T,
-): Promise<z.infer<T>> {
+export async function parseJson<T extends z.ZodType>(c: Context, schema: T): Promise<z.infer<T>> {
   let body: unknown;
   try {
     body = await c.req.json();
@@ -54,17 +51,15 @@ export function fileTooLarge(c: Context) {
   return c.json({ error: `Files can be at most ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB.` }, 413);
 }
 
-// Requires a logged-in session and makes the user's id available to `userIdOf`.
+// Requires a logged-in session.
 export const restrict = createMiddleware<AppEnv>(async (c, next) => {
-  const userId = c.get("session").get("userId");
-  if (!userId) return sendStatus(c, 401);
-  c.set("userId", userId);
+  if (c.get("userId") === undefined) return sendStatus(c, 401);
   await next();
 });
 
 // Reads the logged-in user's id. Use only behind `restrict`.
 export function userIdOf(c: Context<AppEnv>): number {
-  return c.get("userId");
+  return c.get("userId")!;
 }
 
 // Maps known errors to status codes; anything else is a 500.

@@ -14,7 +14,7 @@ async function nudge(field: Locator) {
 test("sign up, generate a quiz, edit it, and download the PDF", async ({ page }) => {
   const email = `e2e-${Date.now()}@example.com`;
 
-  await test.step("sign up", async () => {
+  await test.step("sign up, which signs in and opens the dashboard", async () => {
     await page.goto("/signup");
     await page.locator("#firstname").pressSequentially("Ada");
     await page.locator("#lastname").pressSequentially("Lovelace");
@@ -22,14 +22,6 @@ test("sign up, generate a quiz, edit it, and download the PDF", async ({ page })
     await page.locator("#password").pressSequentially(PASSWORD);
     await nudge(page.locator("#lastname"));
     await page.getByRole("button", { name: "Sign up" }).click();
-    await page.waitForURL("**/login");
-  });
-
-  await test.step("log in", async () => {
-    await page.locator("#email").pressSequentially(email);
-    await page.locator("#password").pressSequentially(PASSWORD);
-    await nudge(page.locator("#email"));
-    await page.getByRole("button", { name: "Log in" }).click();
     await page.waitForURL("**/dashboard");
   });
 
@@ -75,6 +67,19 @@ test("sign up, generate a quiz, edit it, and download the PDF", async ({ page })
     expect(content.subarray(0, 5).toString()).toBe("%PDF-");
   });
 
+  await test.step("log out and log back in", async () => {
+    await page.getByRole("button", { name: "Log out" }).click();
+    await page.waitForURL("**/login");
+
+    await page.locator("#email").pressSequentially(email);
+    await page.locator("#password").pressSequentially(PASSWORD);
+    await nudge(page.locator("#email"));
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("**/dashboard");
+    // The session cookie set by the API (another port) is sent with API calls.
+    await expect(page.locator("#question-1-prompt")).toHaveValue("Edited by the smoke test");
+  });
+
   await test.step("switch to dark theme from the nav bar", async () => {
     const html = page.locator("html");
     await expect(html).not.toHaveClass(/\bdark\b/);
@@ -97,11 +102,6 @@ test("a failed job shows why and can be retried", async ({ page }) => {
   await page.locator("#password").pressSequentially(PASSWORD);
   await nudge(page.locator("#lastname"));
   await page.getByRole("button", { name: "Sign up" }).click();
-  await page.waitForURL("**/login");
-  await page.locator("#email").pressSequentially(email);
-  await page.locator("#password").pressSequentially(PASSWORD);
-  await nudge(page.locator("#email"));
-  await page.getByRole("button", { name: "Log in" }).click();
   await page.waitForURL("**/dashboard");
 
   // The fake AI fails on notes containing FAKE_FAIL.

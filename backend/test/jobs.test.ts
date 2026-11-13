@@ -16,6 +16,7 @@ import {
 } from "../src/core/jobs";
 import { type Deps, NotFoundError, TooManyJobsError } from "../src/core/types";
 import { PermanentJobError } from "../src/providers/errors";
+import { ConsoleEmailSender } from "../src/providers/email/consoleEmailSender";
 import { FakeExtractor } from "../src/providers/fake/fakeExtractor";
 import { FileBlobStore } from "../src/providers/fake/fileBlobStore";
 import type { QuizGenerator } from "../src/providers/types";
@@ -34,7 +35,15 @@ const QUIZ: QuizDraft = {
 
 // Deps whose generator behaves as `generate` says.
 function depsWith(generate: QuizGenerator["generate"]): Deps {
-  return { prisma, providers: { blobs, extractor: new FakeExtractor(), generator: { generate } } };
+  return {
+    prisma,
+    providers: {
+      blobs,
+      email: new ConsoleEmailSender(),
+      extractor: new FakeExtractor(),
+      generator: { generate },
+    },
+  };
 }
 
 const succeeding = depsWith(async (_text, onProgress) => {
@@ -48,7 +57,7 @@ let emailCount = 0;
 // Creates a user with one uploaded document, which queues a job.
 async function userWithDocument(deps: Deps = succeeding) {
   const user = await prisma.user.create({
-    data: { email: `jobs-${++emailCount}@example.com`, fullname: "Jobs", password: "x" },
+    data: { email: `jobs-${++emailCount}@example.com`, name: "Jobs" },
   });
   const { document, job } = await uploadDocument(deps, user.id, {
     filename: "notes.txt",

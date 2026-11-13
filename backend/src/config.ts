@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 // Treat empty strings (e.g. `REDIS_URL=` in .env) as unset.
-function blankAsUnset<T extends z.ZodTypeAny>(schema: T) {
+function blankAsUnset<T extends z.ZodType>(schema: T) {
   return z.preprocess((value) => (value === "" ? undefined : value), schema);
 }
 
@@ -10,8 +10,13 @@ const EnvSchema = z.object({
   PORT: z.coerce.number().int().default(8080),
   // Comma-separated list of origins allowed to call the API.
   FRONTEND_URL: z.string().default("http://localhost:3000"),
-  // Encrypts the session cookie; hono-sessions needs at least 32 characters.
-  SESSION_SECRET: z.string().min(32).default("development-only-session-secret-0123456789"),
+  // Signs better-auth's session cookies and tokens. Required in production.
+  BETTER_AUTH_SECRET: blankAsUnset(z.string().min(32).optional()),
+  // The public URL of this backend; reset links in emails point here.
+  BETTER_AUTH_URL: blankAsUnset(z.string().url().optional()),
+  // How password reset emails go out: better-auth's email service, or printed to the log.
+  EMAIL: blankAsUnset(z.enum(["betterauth", "console"]).default("console")),
+  BETTER_AUTH_API_KEY: blankAsUnset(z.string().optional()),
   REDIS_URL: blankAsUnset(z.string().optional()),
   // Where uploaded files and transcripts are kept: Google Cloud Storage, or a local directory.
   STORAGE: blankAsUnset(z.enum(["gcs", "local"]).default("gcs")),
@@ -36,6 +41,7 @@ export const RENAMED_VARS: Record<string, string> = {
   QUIZ_GENERATOR: "AI=gemini|fake",
   FAKE_DATA_DIR: "LOCAL_DATA_DIR",
   ANTHROPIC_MODEL: "LLM_MODEL",
+  SESSION_SECRET: "BETTER_AUTH_SECRET",
   GCLOUD_PROJECT_ID: "nothing (Gemini reads documents now; remove it)",
   GCLOUD_DOCUMENT_PROCESSOR_ID: "nothing (Gemini reads documents now; remove it)",
 };
@@ -70,6 +76,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     }
   }
 
+  const isProduction = parsed.NODE_ENV === "production";
+  if (isProduction && parsed.BETTER_AUTH_SECRET === undefined) {
+    throw new Error("BETTER_AUTH_SECRET is required in production (at least 32 characters).");
+  }
+  if (parsed.EMAIL === "betterauth" && parsed.BETTER_AUTH_API_KEY === undefined) {
+    throw new Error(
+      "EMAIL=betterauth needs BETTER_AUTH_API_KEY. Set it, or set EMAIL=console to print reset links to the log.",
+    );
+  }
+
   if (parsed.STORAGE === "gcs" && parsed.GOOGLE_APPLICATION_CREDENTIALS === undefined) {
     throw new Error(
       "STORAGE=gcs needs GOOGLE_APPLICATION_CREDENTIALS. Set it, or set STORAGE=local to keep files on disk.",
@@ -77,12 +93,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   }
 
   return {
-    isProduction: parsed.NODE_ENV === "production",
+    isProduction,
     port: parsed.PORT,
     frontendOrigins: parsed.FRONTEND_URL.split(",")
       .map((origin) => origin.trim())
       .filter(Boolean),
-    sessionSecret: parsed.SESSION_SECRET,
+    auth: {
+      secret: parsed.BETTER_AUTH_SECRET ?? "development-only-better-auth-secret-0123456789",
+      baseURL: parsed.BETTER_AUTH_URL ?? `http://localhost:${parsed.PORT}`,
+    },
+    email: {
+      sender: parsed.EMAIL,
+      apiKey: parsed.BETTER_AUTH_API_KEY,
+    },
     redisUrl: parsed.REDIS_URL,
     storage: parsed.STORAGE,
     localDataDir: parsed.LOCAL_DATA_DIR,

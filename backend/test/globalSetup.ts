@@ -13,7 +13,7 @@ export default async function setup() {
 
   const prisma = new PrismaClient({ datasources: { db: { url } } });
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "quiz_jobs", "questions", "quizzes", "documents", "users" RESTART IDENTITY CASCADE',
+    'TRUNCATE "quiz_jobs", "questions", "quizzes", "documents", "verifications", "users" RESTART IDENTITY CASCADE',
   );
   await prisma.$disconnect();
 }

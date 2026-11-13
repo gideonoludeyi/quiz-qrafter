@@ -1,6 +1,6 @@
 // Creates a demo user with one document and quiz, using local storage and the fake AI.
 // Run from backend/: vpx scripts/seed.ts
-import bcrypt from "bcrypt";
+import { createAuth } from "../src/auth";
 import { loadConfig } from "../src/config";
 import { uploadDocument } from "../src/core/documents";
 import { getQuizJob, runNextJob } from "../src/core/jobs";
@@ -20,11 +20,13 @@ async function main() {
   });
   const deps = { prisma, providers: createProviders(config) };
 
-  const user = await prisma.user.upsert({
-    where: { email: EMAIL },
-    update: {},
-    create: { email: EMAIL, fullname: "Demo User", password: await bcrypt.hash(PASSWORD, 10) },
-  });
+  // Sign up through better-auth, so the demo user has a password account like any other user.
+  if ((await prisma.user.findUnique({ where: { email: EMAIL } })) === null) {
+    await createAuth(config, deps).api.signUpEmail({
+      body: { name: "Demo User", email: EMAIL, password: PASSWORD },
+    });
+  }
+  const user = await prisma.user.findUniqueOrThrow({ where: { email: EMAIL } });
 
   const content = Buffer.from(FAKE_SAMPLE_TEXT);
   const { job } = await uploadDocument(deps, user.id, {

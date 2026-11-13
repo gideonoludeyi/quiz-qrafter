@@ -49,6 +49,7 @@ The backend can run without Google Cloud or the Gemini API. In `backend/.env`, s
 - `docker compose up -d` starts Postgres and Redis.
 - `vp run dev` builds `packages/shared` first, then starts the backend (port 8080, with the job worker inside it) and frontend (port 3000).
 - `vpx scripts/seed.ts` (from `backend/`) creates `demo@example.com` / `Password1` with a document and a quiz.
+- Password reset links appear in the backend log (`EMAIL=console`).
 - `vp test` runs the shared unit tests and the backend tests. The backend tests use a separate `test` schema in the local Postgres.
 - `vp run e2e` runs the Playwright smoke tests against their own servers on ports 3100 and 8090, with `AI=fake`. It uses Playwright's Chromium if you have run `npx playwright install chromium`, and your installed Chrome otherwise.
 
@@ -62,6 +63,15 @@ Uploading a file queues a quiz job in the `quiz_jobs` table. A worker claims it,
 - Failures that a retry can't fix (a refusal, a file too long to read, an unsupported file) throw `PermanentJobError`, whose message is shown to the user. Any other error is retried twice, 30 s and then 60 s later.
 - A job whose worker stops sending heartbeats for 2 minutes is requeued.
 - `FAKE_AI_DELAY_MS` slows the fake AI so progress is visible; the fake AI fails on notes containing `FAKE_FAIL`.
+
+## Authentication
+
+The backend (Hono) uses better-auth, mounted at `/api/auth/*`; the frontend talks to it through `better-auth/react` (`frontend/src/services/auth/authClient.ts`). Sessions are stored in Postgres and last 7 days. API routes under `/api/v1` require a session (`restrict` in `backend/src/api/v1/http.ts`).
+
+- Passwords are hashed with bcrypt, which users created before better-auth were hashed with.
+- IDs are serial integers (`generateId: "serial"`), so `users.id` and everything that references it are numbers.
+- Password reset emails go through the email provider: `EMAIL=console` (the default) prints the link to the backend log, `EMAIL=betterauth` sends it with better-auth's email service and needs `BETTER_AUTH_API_KEY`.
+- better-auth only accepts sign-in requests from `FRONTEND_URL` origins. Requests without a trusted `Origin` header (e.g. curl, tests) need one set.
 
 ## Shared Schemas
 

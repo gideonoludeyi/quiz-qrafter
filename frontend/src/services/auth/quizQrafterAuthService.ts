@@ -1,62 +1,57 @@
-import { expectOk } from "../http";
+import { type AuthClient, createQuizQrafterAuthClient } from "./authClient";
 import type { AuthService, LoginCredentials, SignUpInfo, User } from "./types";
 
-export class QuizQrafterAuthService implements AuthService {
-  constructor(private readonly baseURL: URL) {}
+type ClientError = { message?: string; status: number } | null;
 
-  async currentUser(): Promise<User | null> {
-    const response = await fetch(new URL("/api/v1/auth/info", this.baseURL), {
-      method: "GET",
-      credentials: "include",
-    });
-    if (!response.ok) return null;
-    const { email, fullname } = await response.json();
-    return {
-      email: email,
-      username: fullname,
-    };
+function toUser(user: { email: string; name: string }): User {
+  return { email: user.email, username: user.name };
+}
+
+// Throws better-auth's message (e.g. "User already exists") or the fallback.
+function throwIfError(error: ClientError, fallback: string) {
+  if (error) throw new Error(error.message || `${fallback} (${error.status})`);
+}
+
+export class QuizQrafterAuthService implements AuthService {
+  private readonly client: AuthClient;
+
+  constructor(baseURL: URL) {
+    this.client = createQuizQrafterAuthClient(baseURL);
   }
 
-  async signUp(info: SignUpInfo): Promise<void> {
-    const response = await fetch(new URL("/api/v1/auth/signup", this.baseURL), {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        email: info.email,
-        password: info.password,
-        fullname: info.fullname,
-      }),
+  async currentUser(): Promise<User | null> {
+    const { data } = await this.client.getSession();
+    return data ? toUser(data.user) : null;
+  }
+
+  async signUp(info: SignUpInfo): Promise<User> {
+    const { data, error } = await this.client.signUp.email({
+      name: info.fullname,
+      email: info.email,
+      password: info.password,
     });
-    await expectOk(response, "Could not create the account. The email may already be in use.");
+    throwIfError(error, "Could not create the account");
+    return toUser(data!.user);
   }
 
   async login(credentials: LoginCredentials): Promise<User> {
-    const response = await fetch(new URL("/api/v1/auth/login", this.baseURL), {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        email: credentials.email,
-        password: credentials.password,
-      }),
-    });
-    await expectOk(response, "Invalid email or password.");
-    const { email, fullname } = await response.json();
-    return {
-      email: email,
-      username: fullname,
-    };
+    const { data, error } = await this.client.signIn.email(credentials);
+    throwIfError(error, "Invalid email or password");
+    return toUser(data!.user);
   }
 
   async signOut(): Promise<void> {
-    await fetch(new URL("/api/v1/auth/logout", this.baseURL), {
-      method: "POST",
-      credentials: "include",
-    });
+    const { error } = await this.client.signOut();
+    throwIfError(error, "Could not sign out");
+  }
+
+  async requestPasswordReset(email: string, redirectTo: string): Promise<void> {
+    const { error } = await this.client.requestPasswordReset({ email, redirectTo });
+    throwIfError(error, "Could not send the reset link");
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    const { error } = await this.client.resetPassword({ token, newPassword });
+    throwIfError(error, "Could not update the password");
   }
 }

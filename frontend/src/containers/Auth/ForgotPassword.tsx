@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "../../services/auth";
 import AuthLayout from "./AuthLayout";
 
 const ForgotPassword = () => {
@@ -11,12 +12,14 @@ const ForgotPassword = () => {
   const [isValid, setValidation] = useState(false);
   const [error, setError] = useState<Record<string, string>>({});
   const navigate = useNavigate();
+  const { requestPasswordReset } = useAuth();
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
-      // Assuming there's a function in useAuth or another service to request password reset
-      // await useAuth().requestPasswordReset(email);
+      // The link in the email brings the user back to the update-password page.
+      await requestPasswordReset(email, `${window.location.origin}/update-password`);
+      // The same message whether or not the email has an account, so it doesn't reveal which do.
       setMessage("If an account exists for this email, a password reset link has been sent.");
       setTimeout(() => navigate("/login"), 5000); // Redirect to login after 5 seconds
     } catch (error) {
