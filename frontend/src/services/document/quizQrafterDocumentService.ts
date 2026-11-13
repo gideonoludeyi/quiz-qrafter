@@ -32,4 +32,20 @@ export class QuizQrafterDocumentService implements DocumentService {
     await expectOk(response, "Failed to load your documents");
     return ListDocumentsResponseSchema.parse(await response.json()).documents;
   }
+
+  async getFile(id: number): Promise<Blob> {
+    const response = await fetch(new URL(`/api/v1/document/${id}/file`, this.baseURL), {
+      credentials: "include",
+    });
+    await expectOk(response, "Failed to load the document");
+    return response.blob();
+  }
+
+  async getText(id: number): Promise<string> {
+    const response = await fetch(new URL(`/api/v1/document/${id}/text`, this.baseURL), {
+      credentials: "include",
+    });
+    await expectOk(response, "Failed to load the document's text");
+    return response.text();
+  }
 }

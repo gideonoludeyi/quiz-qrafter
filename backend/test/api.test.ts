@@ -18,6 +18,7 @@ import { loadConfig } from "../src/config";
 import { runQuizJob } from "../src/core/jobs";
 import { createProviders } from "../src/providers";
 import type { ConsoleEmailSender } from "../src/providers/email/consoleEmailSender";
+import { DOCX, docxWith } from "./fixtures";
 import { testDatabaseUrl } from "./testDatabase";
 
 const NOTES = "Mitochondria are the powerhouse of the cell. They produce ATP.";
@@ -128,6 +129,39 @@ describe("quiz API", () => {
       .expect(202);
     expect(upload.body.document.mimeType).toBe("text/markdown");
     await prisma.document.delete({ where: { id: upload.body.document.id } });
+  });
+
+  it("serves a document's original file for the viewer", async () => {
+    const { body: list } = await alice.get("/api/v1/document").expect(200);
+    const notes = list.documents.find((d: { filename: string }) => d.filename === "notes.txt");
+    const response = await alice.get(`/api/v1/document/${notes.id}/file`).expect(200);
+    expect(response.headers["content-type"]).toMatch(/^text\/plain/);
+    expect(response.headers["x-content-type-options"]).toBe("nosniff");
+    expect(response.headers["content-disposition"]).toBe("inline; filename*=UTF-8''notes.txt");
+    expect(response.text).toBe(NOTES);
+  });
+
+  it("serves a Word document's text, and refuses text for files it can't read locally", async () => {
+    const docx = await alice
+      .post("/api/v1/document/upload")
+      .attach("file", await docxWith("Word notes about ribosomes."), {
+        filename: "notes.docx",
+        contentType: DOCX,
+      })
+      .expect(202);
+    const text = await alice.get(`/api/v1/document/${docx.body.document.id}/text`).expect(200);
+    expect(text.text.trim()).toBe("Word notes about ribosomes.");
+
+    const png = await alice
+      .post("/api/v1/document/upload")
+      .attach("file", Buffer.from("PNG"), { filename: "diagram.png", contentType: "image/png" })
+      .expect(202);
+    await alice.get(`/api/v1/document/${png.body.document.id}/text`).expect(415);
+    await alice.get("/api/v1/document/999999/file").expect(404);
+
+    await prisma.document.deleteMany({
+      where: { id: { in: [docx.body.document.id, png.body.document.id] } },
+    });
   });
 
   it("rejects files over the size limit with 413", async () => {
@@ -265,6 +299,7 @@ describe("quiz API", () => {
     await bob.post("/api/v1/jobs").send({ documentId: quiz.documentId }).expect(404);
     const { body: aliceDocs } = await alice.get("/api/v1/document").expect(200);
     await bob.get(`/api/v1/jobs/${aliceDocs.documents[0].latestJob.id}`).expect(404);
+    await bob.get(`/api/v1/document/${quiz.documentId}/file`).expect(404);
 
     const { body } = await bob.get("/api/v1/document").expect(200);
     expect(body.documents).toEqual([]);

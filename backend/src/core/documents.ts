@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { type Document, type QuizJob, uploadTypeFor } from "@quizqrafter/shared";
 import { assertCanStartJob, enqueueQuizJob, toQuizJob } from "./jobs";
-import { type Deps, TooManyJobsError, UnsupportedFileError } from "./types";
+import { readLocally } from "../providers/localText";
+import { type Deps, NotFoundError, TooManyJobsError, UnsupportedFileError } from "./types";
 
 const withQuizAndLatestJob = {
   quiz: { select: { id: true } },
@@ -78,3 +79,22 @@ export async function listDocuments({ prisma }: Deps, userId: number): Promise<D
   return rows.map(toDocument);
 }
 
+// One of the user's documents with its original file, for viewing.
+export async function getDocumentFile(
+  { prisma, providers }: Deps,
+  userId: number,
+  id: number,
+): Promise<{ filename: string; mimeType: string; content: Buffer }> {
+  const row = await prisma.document.findFirst({ where: { id, userId } });
+  if (row === null) throw new NotFoundError("Document");
+  const content = await providers.blobs.get(row.rawURL);
+  return { filename: row.filename, mimeType: row.mimeType, content };
+}
+
+// A Word document's text, for viewing; browsers can't show .docx files themselves.
+export async function getDocumentText(deps: Deps, userId: number, id: number): Promise<string> {
+  const { mimeType, content } = await getDocumentFile(deps, userId, id);
+  const text = await readLocally(content, mimeType);
+  if (text === null) throw new UnsupportedFileError();
+  return text;
+}

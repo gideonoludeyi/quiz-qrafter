@@ -6,10 +6,12 @@ type DocumentContextValue = {
   documents: Document[];
   loading: boolean;
   error: Error | null;
-  // Resolves to the uploaded document and its job, or null on failure (with `error` set).
-  upload: (file: File) => Promise<{ document: Document; job: QuizJob } | null>;
+  // Resolves to the uploaded document and its job, or to the error (also set as `error`).
+  upload: (file: File) => Promise<{ document: Document; job: QuizJob } | Error>;
   // Reloads the document list and resolves to it (empty on failure).
   refresh: () => Promise<Document[]>;
+  // The service itself, for the viewer's file and text requests.
+  service: DocumentService;
 };
 
 const DocumentContext = createContext<DocumentContextValue | null>(null);
@@ -47,8 +49,9 @@ export function DocumentProvider({ service, children }: DocumentProviderProps) {
         return result;
       } catch (err) {
         console.error("Upload failed:", err);
-        setError(err instanceof Error ? err : new Error("An unexpected error occurred"));
-        return null;
+        const failure = err instanceof Error ? err : new Error("An unexpected error occurred");
+        setError(failure);
+        return failure;
       } finally {
         setLoading(false);
       }
@@ -57,8 +60,8 @@ export function DocumentProvider({ service, children }: DocumentProviderProps) {
   );
 
   const value = useMemo(
-    () => ({ documents, loading, error, upload, refresh }),
-    [documents, loading, error, upload, refresh],
+    () => ({ documents, loading, error, upload, refresh, service }),
+    [documents, loading, error, upload, refresh, service],
   );
 
   return <DocumentContext.Provider value={value}>{children}</DocumentContext.Provider>;

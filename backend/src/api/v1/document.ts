@@ -1,10 +1,15 @@
 import { MAX_UPLOAD_BYTES } from "@quizqrafter/shared";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { listDocuments, uploadDocument } from "../../core/documents";
+import {
+  getDocumentFile,
+  getDocumentText,
+  listDocuments,
+  uploadDocument,
+} from "../../core/documents";
 import type { Deps } from "../../core/types";
 import type { AppEnv } from "./env";
-import { fileTooLarge, restrict, userIdOf } from "./http";
+import { fileTooLarge, parseId, restrict, userIdOf } from "./http";
 
 // Room for the multipart framing around a file that is exactly at the size limit.
 const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
@@ -34,6 +39,24 @@ export default function documentRouter(deps: Deps) {
   router.get("/", restrict, async (c) => {
     const documents = await listDocuments(deps, userIdOf(c));
     return c.json({ documents }, 200);
+  });
+
+  // The original file, for the document viewer. Only allowed upload types are ever stored,
+  // and nosniff stops the browser from treating one as anything else.
+  router.get("/:id/file", restrict, async (c) => {
+    const file = await getDocumentFile(deps, userIdOf(c), parseId(c.req.param("id")));
+    return c.body(new Uint8Array(file.content), 200, {
+      "Content-Type": file.mimeType,
+      "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
+      "X-Content-Type-Options": "nosniff",
+      "Cache-Control": "private, max-age=3600",
+    });
+  });
+
+  // A Word document's text, which the viewer shows in place of the .docx file.
+  router.get("/:id/text", restrict, async (c) => {
+    const text = await getDocumentText(deps, userIdOf(c), parseId(c.req.param("id")));
+    return c.text(text, 200);
   });
 
   return router;
