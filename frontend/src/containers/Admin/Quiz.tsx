@@ -1,4 +1,13 @@
-import { type Document, type QuizDraft, QuizDraftSchema } from "@quizqrafter/shared";
+import {
+  ALLOWED_UPLOAD_TYPES,
+  type Document,
+  isJobActive,
+  MAX_UPLOAD_BYTES,
+  type QuizDraft,
+  QuizDraftSchema,
+  type QuizJob,
+  uploadTypeFor,
+} from "@quizqrafter/shared";
 import {
   RiDownloadLine,
   RiFileTextLine,
@@ -13,7 +22,18 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useDocumentAPI } from "../../services/document/context";
 import { useQuizAPI } from "../../services/quiz/context";
+import { useQuizJob } from "../../services/quiz/useQuizJob";
+import JobStatus from "./JobStatus";
 import QuizEditor, { findDraftProblem } from "./QuizEditor";
+
+const ACCEPT = Object.values(ALLOWED_UPLOAD_TYPES).flat().join(",");
+const MAX_UPLOAD_MB = MAX_UPLOAD_BYTES / (1024 * 1024);
+
+// The job worth showing for a document: one in progress, or one that failed.
+function visibleJob(document: Document): QuizJob | null {
+  const job = document.latestJob;
+  return job !== null && job.status !== "succeeded" ? job : null;
+}
 
 const Quiz = () => {
   const {
@@ -25,7 +45,7 @@ const Quiz = () => {
   } = useDocumentAPI();
   const {
     quiz,
-    generate,
+    startJob,
     load,
     save,
     downloadPdf,
@@ -36,7 +56,21 @@ const Quiz = () => {
   const [file, setFile] = useState<File | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [draft, setDraft] = useState<QuizDraft | null>(null);
+  // The selected document's job, as last set by this page; useQuizJob keeps it current.
+  const [trackedJob, setTrackedJob] = useState<QuizJob | null>(null);
 
+  const job = useQuizJob(trackedJob, (finished) => {
+    void refresh();
+    if (finished.status === "succeeded") {
+      setTrackedJob(null);
+      if (finished.quizId !== null) void load(finished.quizId);
+      toast.success("Your quiz is ready.");
+    } else {
+      toast.error(finished.error ?? "The quiz couldn't be made.");
+    }
+  });
+
+  const jobActive = isJobActive(job);
   const busy = uploadLoading || quizLoading;
   const selected = documents.find((document) => document.id === selectedId) ?? null;
 
@@ -54,6 +88,7 @@ const Quiz = () => {
   const openDocument = useCallback(
     async (document: Document) => {
       setSelectedId(document.id);
+      setTrackedJob(visibleJob(document));
       if (document.quizId === null) {
         clear();
       } else {
@@ -77,13 +112,14 @@ const Quiz = () => {
     setFile(event.target.files?.[0] ?? null);
   };
 
-  const handleGenerate = async (documentId: number) => {
-    if (await generate(documentId)) {
-      toast.success("Quiz ready.");
-    } else {
-      toast.error("Could not generate the quiz.");
+  const handleStartJob = async (documentId: number) => {
+    const started = await startJob(documentId);
+    if (started === null) {
+      toast.error("Could not start writing the quiz.");
+      return;
     }
-    await refresh();
+    setTrackedJob(started);
+    void refresh();
   };
 
   const handleUpload = async () => {
@@ -91,18 +127,26 @@ const Quiz = () => {
       toast.error("Please select a file to upload.");
       return;
     }
+    if (uploadTypeFor(file.type, file.name) === null) {
+      toast.error("This file type isn't supported. Upload a PDF, image, Word or text file.");
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error(`Files can be at most ${MAX_UPLOAD_MB} MB.`);
+      return;
+    }
     if (!confirmDiscard()) return;
 
-    const document = await upload(file);
-    if (document === null) {
+    const result = await upload(file);
+    if (result === null) {
       toast.error("Failed to upload file.");
       return;
     }
     toast.success("File uploaded. Writing your quiz…");
     setFile(null);
-    setSelectedId(document.id);
+    setSelectedId(result.document.id);
+    setTrackedJob(result.job);
     clear();
-    await handleGenerate(document.id);
   };
 
   const handleSave = async () => {
@@ -140,12 +184,16 @@ const Quiz = () => {
             onChange={handleFileChange}
             className="sr-only"
             disabled={busy}
-            accept=".pdf,.docx,.txt,image/*"
+            accept={ACCEPT}
           />
           <span className="truncate">{file?.name ?? "Choose File"}</span>
         </label>
         <Button onClick={handleUpload} disabled={busy || !file}>
-          {busy ? <Spinner data-icon="inline-start" /> : <RiUploadLine data-icon="inline-start" />}
+          {uploadLoading ? (
+            <Spinner data-icon="inline-start" />
+          ) : (
+            <RiUploadLine data-icon="inline-start" />
+          )}
           Upload &amp; generate
         </Button>
         <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -153,7 +201,7 @@ const Quiz = () => {
           <Button
             variant={dirty ? "default" : "secondary"}
             onClick={handleSave}
-            disabled={busy || !dirty}
+            disabled={busy || jobActive || !dirty}
           >
             <RiSaveLine data-icon="inline-start" />
             Save
@@ -161,7 +209,7 @@ const Quiz = () => {
           <Button
             variant="secondary"
             onClick={() => downloadPdf()}
-            disabled={busy || !quiz || dirty}
+            disabled={busy || jobActive || !quiz || dirty}
           >
             <RiDownloadLine data-icon="inline-start" />
             Download PDF
@@ -181,42 +229,62 @@ const Quiz = () => {
             <p className="text-sm text-muted-foreground">Nothing uploaded yet.</p>
           ) : (
             <nav aria-label="Your documents" className="flex flex-col gap-1">
-              {documents.map((document) => (
-                <Button
-                  key={document.id}
-                  variant={document.id === selectedId ? "secondary" : "ghost"}
-                  className="justify-start"
-                  disabled={busy}
-                  onClick={() => {
-                    if (document.id !== selectedId && confirmDiscard()) void openDocument(document);
-                  }}
-                >
-                  <RiFileTextLine data-icon="inline-start" />
-                  <span className="truncate">{document.filename}</span>
-                </Button>
-              ))}
+              {documents.map((document) => {
+                const inProgress =
+                  document.id === selectedId ? jobActive : isJobActive(document.latestJob);
+                return (
+                  <Button
+                    key={document.id}
+                    variant={document.id === selectedId ? "secondary" : "ghost"}
+                    className="justify-start"
+                    disabled={busy}
+                    onClick={() => {
+                      if (document.id !== selectedId && confirmDiscard()) {
+                        void openDocument(document);
+                      }
+                    }}
+                  >
+                    {inProgress ? (
+                      <Spinner data-icon="inline-start" aria-label="Quiz in progress" />
+                    ) : (
+                      <RiFileTextLine data-icon="inline-start" />
+                    )}
+                    <span className="truncate">{document.filename}</span>
+                  </Button>
+                );
+              })}
             </nav>
           )}
-          <p className="text-xs text-muted-foreground">PDF uploads must be 15 pages or less.</p>
+          <p className="text-xs text-muted-foreground">
+            Up to {MAX_UPLOAD_MB} MB: PDF, image, Word or text.
+          </p>
         </aside>
 
-        <section className="min-w-0">
+        <section className="flex min-w-0 flex-col gap-4">
+          {selected !== null && job !== null && (
+            <JobStatus
+              job={job}
+              filename={selected.filename}
+              retrying={quizLoading}
+              onRetry={() => void handleStartJob(selected.id)}
+            />
+          )}
+
           {selected === null ? (
             <p className="text-sm text-muted-foreground">
               Upload your notes to generate your first quiz.
             </p>
-          ) : draft === null ? (
-            <div className="flex flex-col items-start gap-3">
-              <p className="text-sm text-muted-foreground">
-                {quizLoading
-                  ? "Working on the quiz…"
-                  : `There is no quiz for ${selected.filename} yet.`}
-              </p>
-              <Button onClick={() => handleGenerate(selected.id)} disabled={busy}>
-                {quizLoading && <Spinner data-icon="inline-start" />}
-                Generate quiz
-              </Button>
-            </div>
+          ) : jobActive ? null : draft === null ? (
+            job === null && (
+              <div className="flex flex-col items-start gap-3">
+                <p className="text-sm text-muted-foreground">
+                  There is no quiz for {selected.filename} yet.
+                </p>
+                <Button onClick={() => handleStartJob(selected.id)} disabled={busy}>
+                  Generate quiz
+                </Button>
+              </div>
+            )
           ) : (
             <div className="flex flex-col gap-4">
               <QuizEditor draft={draft} onChange={setDraft} />
@@ -230,7 +298,7 @@ const Quiz = () => {
                       "Regenerating replaces this quiz, including your edits. Continue?",
                     )
                   ) {
-                    void handleGenerate(selected.id);
+                    void handleStartJob(selected.id);
                   }
                 }}
               >

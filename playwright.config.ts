@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { chromium, defineConfig } from "@playwright/test";
+import { RENAMED_VARS } from "./backend/src/config";
 import { testDatabaseUrl } from "./backend/test/testDatabase";
 
 // Use Playwright's own Chromium if it has been downloaded (`npx playwright install chromium`),
@@ -21,11 +22,18 @@ export default defineConfig({
   },
   webServer: [
     {
-      // The backend runs with fake providers, so no Google Cloud or Claude credentials are needed.
+      // Local storage and the fake AI, so no Google Cloud or Gemini credentials are needed.
       command: "npm run dev --workspace=backend",
       url: `http://localhost:${API_PORT}/healthz`,
       env: {
-        PROVIDERS: "fake",
+        // The backend also reads backend/.env (Prisma loads it too), but never overrides a
+        // variable that is already set. Blanking the renamed ones keeps a developer's
+        // leftover settings from stopping the test server.
+        ...Object.fromEntries(Object.keys(RENAMED_VARS).map((name) => [name, ""])),
+        STORAGE: "local",
+        AI: "fake",
+        // About 3 s of writing, so the page (which checks every 1.5 s) sees progress before the quiz appears.
+        FAKE_AI_DELAY_MS: "1000",
         PORT: String(API_PORT),
         FRONTEND_URL: `http://localhost:${WEB_PORT}`,
         DATABASE_URL: testDatabaseUrl(),

@@ -10,12 +10,13 @@
         "check-types": "tsc --noEmit",
         "prisma:deploy": "prisma migrate deploy",
         "prestart": "prisma migrate deploy",
-        "predev": "prisma migrate deploy && prisma generate"
+        "predev": "prisma migrate deploy && prisma generate",
+        "worker": "node --env-file-if-exists=.env dist/worker.js",
+        "dev:worker": "node --import=vite-plus/register --env-file-if-exists=.env src/worker.ts"
     },
     "dependencies": {
-        "@anthropic-ai/sdk": "^1.8.0",
-        "@google-cloud/documentai": "^8.2.0",
         "@google-cloud/storage": "^7.8.0",
+        "@google/genai": "^3.3.0",
         "@prisma/client": "^5.10.1",
         "@quizqrafter/shared": "*",
         "bcrypt": "^5.1.1",
@@ -23,6 +24,7 @@
         "cors": "^2.8.5",
         "express": "^4.18.2",
         "express-session": "^1.18.0",
+        "mammoth": "^1.13.0",
         "multer": "^1.4.5-lts.1",
         "pdfkit": "^0.20.2",
         "prisma": "^5.10.1",
@@ -38,6 +40,7 @@
         "@types/node": "^20.11.19",
         "@types/pdfkit": "^0.17.7",
         "@types/supertest": "^7.2.1",
+        "jszip": "^3.10.2",
         "supertest": "^7.3.2",
         "typescript": "^5.3.3",
         "vite-plus": "1.6.0"

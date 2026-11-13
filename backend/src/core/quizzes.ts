@@ -1,4 +1,4 @@
-import type { Prisma, Question as QuestionRow } from "@prisma/client";
+import type { Prisma, PrismaClient, Question as QuestionRow } from "@prisma/client";
 import { type Question, QuestionSchema, type Quiz, type QuizDraft } from "@quizqrafter/shared";
 import { type Deps, NotFoundError } from "./types";
 
@@ -57,23 +57,20 @@ async function findOwnedQuiz({ prisma }: Deps, userId: number, quizId: number): 
   return row;
 }
 
-// Generates a quiz for one of the user's documents, replacing any existing quiz.
-export async function generateQuiz(deps: Deps, userId: number, documentId: number): Promise<Quiz> {
-  const { prisma, providers } = deps;
-  const document = await prisma.document.findFirst({ where: { id: documentId, userId } });
-  if (document === null) throw new NotFoundError("Document");
-
-  const transcript = await providers.blobs.get(document.transcriptionURL);
-  const draft = await providers.generator.generate(transcript.toString("utf-8"));
+// Stores a generated quiz for a document, replacing any existing quiz. Returns the quiz id.
+export async function saveGeneratedQuiz(
+  prisma: PrismaClient,
+  documentId: number,
+  draft: QuizDraft,
+): Promise<number> {
   const questions = { create: draft.questions.map(toQuestionData) };
-
   const row = await prisma.quiz.upsert({
     where: { documentId },
     create: { documentId, title: draft.title, questions },
     update: { title: draft.title, questions: { deleteMany: {}, ...questions } },
-    include: withQuestions,
+    select: { id: true },
   });
-  return toQuiz(row);
+  return row.id;
 }
 
 export async function getQuiz(deps: Deps, userId: number, quizId: number): Promise<Quiz> {

@@ -1,22 +1,27 @@
 import { randomUUID } from "node:crypto";
-import type { Document } from "@quizqrafter/shared";
-import type { Deps } from "./types";
+import type { Prisma } from "@prisma/client";
+import { type Document, type QuizJob, uploadTypeFor } from "@quizqrafter/shared";
+import { enqueueQuizJob, toQuizJob } from "./jobs";
+import { type Deps, UnsupportedFileError } from "./types";
 
-type DocumentRow = {
-  id: number;
-  filename: string;
-  size: number;
-  createdAt: Date;
-  quiz: { id: number } | null;
-};
+const withQuizAndLatestJob = {
+  quiz: { select: { id: true } },
+  jobs: { orderBy: { createdAt: "desc" }, take: 1 },
+} as const;
+
+type DocumentRow = Prisma.DocumentGetPayload<{ include: typeof withQuizAndLatestJob }>;
 
 function toDocument(row: DocumentRow): Document {
+  const quizId = row.quiz?.id ?? null;
+  const latestJob = row.jobs[0];
   return {
     id: row.id,
     filename: row.filename,
+    mimeType: row.mimeType,
     size: row.size,
     createdAt: row.createdAt.toISOString(),
-    quizId: row.quiz?.id ?? null,
+    quizId,
+    latestJob: latestJob ? toQuizJob(latestJob, quizId) : null,
   };
 }
 
@@ -27,34 +32,39 @@ export type UploadedFile = {
   mimeType: string;
 };
 
-// Extracts the file's text, stores the file and its transcript, and records the document.
+// Stores the file and queues a job to read it and write its quiz.
 export async function uploadDocument(
-  { prisma, providers }: Deps,
+  deps: Deps,
   userId: number,
   file: UploadedFile,
-): Promise<Document> {
-  const text = await providers.extractor.extract(file.content, file.mimeType);
+): Promise<{ document: Document; job: QuizJob }> {
+  const { prisma, providers } = deps;
+  const mimeType = uploadTypeFor(file.mimeType, file.filename);
+  if (mimeType === null) throw new UnsupportedFileError();
 
   // The random part keeps two uploads with the same filename from overwriting each other.
-  const key = `u${userId}/${randomUUID()}-${file.filename}`;
-  const [rawURL, transcriptionURL] = await Promise.all([
-    providers.blobs.put(key, file.content),
-    providers.blobs.put(`${key}.transcript`, text),
-  ]);
-
-  const row = await prisma.document.create({
-    data: { filename: file.filename, size: file.size, rawURL, transcriptionURL, userId },
-    include: { quiz: { select: { id: true } } },
+  const rawURL = await providers.blobs.put(
+    `u${userId}/${randomUUID()}-${file.filename}`,
+    file.content,
+  );
+  const { id } = await prisma.document.create({
+    data: { filename: file.filename, mimeType, size: file.size, rawURL, userId },
   });
-  return toDocument(row);
+
+  const job = await enqueueQuizJob(deps, userId, id);
+  const row = await prisma.document.findUniqueOrThrow({
+    where: { id },
+    include: withQuizAndLatestJob,
+  });
+  return { document: toDocument(row), job };
 }
 
-// Lists a user's documents, newest first.
+// Lists a user's documents, newest first, each with its latest quiz job.
 export async function listDocuments({ prisma }: Deps, userId: number): Promise<Document[]> {
   const rows = await prisma.document.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
-    include: { quiz: { select: { id: true } } },
+    include: withQuizAndLatestJob,
   });
   return rows.map(toDocument);
 }

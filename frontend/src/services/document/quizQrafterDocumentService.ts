@@ -1,5 +1,6 @@
 import {
   type Document,
+  type QuizJob,
   ListDocumentsResponseSchema,
   UploadDocumentResponseSchema,
 } from "@quizqrafter/shared";
@@ -9,7 +10,7 @@ import type { DocumentService } from "./types";
 export class QuizQrafterDocumentService implements DocumentService {
   constructor(private readonly baseURL: URL) {}
 
-  async upload(file: File): Promise<Document> {
+  async upload(file: File): Promise<{ document: Document; job: QuizJob }> {
     const formData = new FormData();
     formData.append("file", file);
 
@@ -20,7 +21,7 @@ export class QuizQrafterDocumentService implements DocumentService {
       headers: { Accept: "application/json" },
     });
     await expectOk(response, "Failed to upload file");
-    return UploadDocumentResponseSchema.parse(await response.json()).document;
+    return UploadDocumentResponseSchema.parse(await response.json());
   }
 
   async list(): Promise<Document[]> {

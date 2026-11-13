@@ -44,15 +44,24 @@ Remove this workaround after upgrading to a Vite+ release that includes [PR #331
 
 ## Running Offline (No Cloud Accounts)
 
-The backend can run without Google Cloud or the Claude API. Set `PROVIDERS=fake` in `backend/.env`: uploads are stored under `backend/.data/`, text files are read as-is, and quiz generation returns a fixed three-question quiz. Postgres still runs locally.
+The backend can run without Google Cloud or the Gemini API. In `backend/.env`, set `STORAGE=local` (files go under `backend/.data/`) and `AI=fake` (text and Word files are read as-is, PDFs and images become sample text, and every quiz is the same three questions). Postgres still runs locally.
 
 - `docker compose up -d` starts Postgres and Redis.
-- `vp run dev` builds `packages/shared` first, then starts the backend (port 8080) and frontend (port 3000).
+- `vp run dev` builds `packages/shared` first, then starts the backend (port 8080, with the job worker inside it) and frontend (port 3000).
 - `vpx scripts/seed.ts` (from `backend/`) creates `demo@example.com` / `Password1` with a document and a quiz.
-- `vp test` runs the shared unit tests and the backend API tests. The API tests use a separate `test` schema in the local Postgres.
-- `vp run e2e` runs the Playwright smoke test against its own servers on ports 3100 and 8090, with fake providers. It uses Playwright's Chromium if you have run `npx playwright install chromium`, and your installed Chrome otherwise.
+- `vp test` runs the shared unit tests and the backend tests. The backend tests use a separate `test` schema in the local Postgres.
+- `vp run e2e` runs the Playwright smoke tests against their own servers on ports 3100 and 8090, with `AI=fake`. It uses Playwright's Chromium if you have run `npx playwright install chromium`, and your installed Chrome otherwise.
 
-To generate quizzes with Claude while storage and text extraction stay fake, also set `QUIZ_GENERATOR=real` and `ANTHROPIC_API_KEY`. `PROVIDERS=real` additionally needs the Google Cloud variables in `backend/.env.example`.
+`AI=gemini` (the default) needs `GEMINI_API_KEY`; `LLM_MODEL` picks the Gemini model (default `gemini-4-hydrogen`). It works with either storage setting. `STORAGE=gcs` (the default) needs `GOOGLE_APPLICATION_CREDENTIALS`.
+
+## Quiz Jobs
+
+Uploading a file queues a quiz job in the `quiz_jobs` table. A worker claims it, has Gemini read the file (PDFs and images; text and Word files are read locally), writes the quiz, and saves it. The browser polls `GET /api/v1/jobs/:id` for progress.
+
+- The worker runs inside the API server unless `WORKER=off`; `npm run worker --workspace=backend` runs it on its own.
+- Failures that a retry can't fix (a refusal, a file too long to read, an unsupported file) throw `PermanentJobError`, whose message is shown to the user. Any other error is retried twice, 30 s and then 60 s later.
+- A job whose worker stops sending heartbeats for 2 minutes is requeued.
+- `FAKE_AI_DELAY_MS` slows the fake AI so progress is visible; the fake AI fails on notes containing `FAKE_FAIL`.
 
 ## Shared Schemas
 

@@ -2,11 +2,18 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
-import { DocumentSchema, QuizSchema, type Quiz } from "@quizqrafter/shared";
+import {
+  DocumentSchema,
+  MAX_UPLOAD_BYTES,
+  QuizJobSchema,
+  QuizSchema,
+  type Quiz,
+} from "@quizqrafter/shared";
 import request from "supertest";
-import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import { createApp } from "../src/app";
 import { loadConfig } from "../src/config";
+import { runNextJob } from "../src/core/jobs";
 import { createProviders } from "../src/providers";
 import { testDatabaseUrl } from "./testDatabase";
 
@@ -14,11 +21,19 @@ const NOTES = "Mitochondria are the powerhouse of the cell. They produce ATP.";
 const PASSWORD = "Password1";
 
 const config = loadConfig({
-  PROVIDERS: "fake",
-  FAKE_DATA_DIR: mkdtempSync(path.join(tmpdir(), "quizqrafter-test-")),
+  STORAGE: "local",
+  AI: "fake",
+  LOCAL_DATA_DIR: mkdtempSync(path.join(tmpdir(), "quizqrafter-test-")),
 });
 const prisma = new PrismaClient({ datasources: { db: { url: testDatabaseUrl() } } });
-const app = createApp(config, { prisma, providers: createProviders(config) });
+const deps = { prisma, providers: createProviders(config) };
+const extract = vi.spyOn(deps.providers.extractor, "extract");
+const app = createApp(config, deps);
+
+// Runs every due job, as the worker would.
+async function runJobs() {
+  while (await runNextJob(deps));
+}
 
 // Signs up and logs in a new user, returning an agent that keeps the session cookie.
 async function loggedInAgent(email: string) {
@@ -45,16 +60,25 @@ describe("quiz API", () => {
 
   it("rejects requests without a session", async () => {
     await request(app).get("/api/v1/document").expect(401);
-    await request(app).post("/api/v1/quiz").send({ documentId: 1 }).expect(401);
+    await request(app).post("/api/v1/jobs").send({ documentId: 1 }).expect(401);
+    await request(app).get("/api/v1/jobs/1").expect(401);
   });
 
-  it("uploads a document and lists it", async () => {
+  it("uploads a document and queues a job for it", async () => {
     const upload = await alice
       .post("/api/v1/document/upload")
       .attach("file", Buffer.from(NOTES), { filename: "notes.txt", contentType: "text/plain" })
-      .expect(200);
+      .expect(202);
     const document = DocumentSchema.parse(upload.body.document);
-    expect(document).toMatchObject({ filename: "notes.txt", size: NOTES.length, quizId: null });
+    const job = QuizJobSchema.parse(upload.body.job);
+    expect(document).toMatchObject({
+      filename: "notes.txt",
+      mimeType: "text/plain",
+      size: NOTES.length,
+      quizId: null,
+      latestJob: { id: job.id, status: "queued" },
+    });
+    expect(job).toMatchObject({ documentId: document.id, status: "queued", quizId: null });
 
     const list = await alice.get("/api/v1/document").expect(200);
     expect(list.body.documents).toHaveLength(1);
@@ -64,13 +88,55 @@ describe("quiz API", () => {
     await alice.post("/api/v1/document/upload").expect(400);
   });
 
-  it("generates a structured quiz from the document", async () => {
+  it("rejects file types it can't read with 415", async () => {
+    await alice
+      .post("/api/v1/document/upload")
+      .attach("file", Buffer.from("MZ"), {
+        filename: "setup.exe",
+        contentType: "application/x-msdownload",
+      })
+      .expect(415);
+  });
+
+  it("accepts markdown sent as application/octet-stream, using the extension", async () => {
+    const upload = await alice
+      .post("/api/v1/document/upload")
+      .attach("file", Buffer.from("# Notes"), {
+        filename: "notes.md",
+        contentType: "application/octet-stream",
+      })
+      .expect(202);
+    expect(upload.body.document.mimeType).toBe("text/markdown");
+    await prisma.document.delete({ where: { id: upload.body.document.id } });
+  });
+
+  it("rejects files over the size limit with 413", async () => {
+    await alice
+      .post("/api/v1/document/upload")
+      .attach("file", Buffer.alloc(MAX_UPLOAD_BYTES + 1), {
+        filename: "huge.txt",
+        contentType: "text/plain",
+      })
+      .expect(413);
+  });
+
+  it("the job reads the document and writes a structured quiz", async () => {
     const { body: list } = await alice.get("/api/v1/document").expect(200);
-    const documentId = list.documents[0].id;
+    const { id: documentId, latestJob } = list.documents[0];
 
-    const response = await alice.post("/api/v1/quiz").send({ documentId }).expect(200);
+    await runJobs();
+
+    const { body: job } = await alice.get(`/api/v1/jobs/${latestJob.id}`).expect(200);
+    expect(job).toMatchObject({
+      status: "succeeded",
+      stage: null,
+      questionsWritten: 3,
+      error: null,
+    });
+    expect(extract).toHaveBeenCalledWith(expect.any(Buffer), "text/plain");
+
+    const response = await alice.get(`/api/v1/quiz/${job.quizId}`).expect(200);
     quiz = QuizSchema.parse(response.body);
-
     expect(quiz.documentId).toBe(documentId);
     expect(quiz.questions.map((q) => q.type)).toEqual([
       "multiple_choice",
@@ -81,16 +147,27 @@ describe("quiz API", () => {
     expect(quiz.questions[0].sourceQuote).toBe("Mitochondria are the powerhouse of the cell.");
 
     const { body: after } = await alice.get("/api/v1/document").expect(200);
-    expect(after.documents[0].quizId).toBe(quiz.id);
+    expect(after.documents[0]).toMatchObject({ quizId: quiz.id, latestJob: { quizId: quiz.id } });
   });
 
-  it("regenerating replaces the quiz instead of adding a second one", async () => {
-    const response = await alice
-      .post("/api/v1/quiz")
+  it("regenerating reuses the transcript and replaces the quiz", async () => {
+    const extractCallsBefore = extract.mock.calls.length;
+    const started = await alice
+      .post("/api/v1/jobs")
       .send({ documentId: quiz.documentId })
-      .expect(200);
-    expect(response.body.id).toBe(quiz.id);
-    expect(response.body.questions).toHaveLength(3);
+      .expect(202);
+    // Asking again while it is queued returns the same job.
+    const again = await alice
+      .post("/api/v1/jobs")
+      .send({ documentId: quiz.documentId })
+      .expect(202);
+    expect(again.body.id).toBe(started.body.id);
+
+    await runJobs();
+
+    const { body: job } = await alice.get(`/api/v1/jobs/${started.body.id}`).expect(200);
+    expect(job).toMatchObject({ status: "succeeded", quizId: quiz.id });
+    expect(extract.mock.calls.length).toBe(extractCallsBefore);
   });
 
   it("saves edits and returns them on the next read", async () => {
@@ -121,7 +198,7 @@ describe("quiz API", () => {
   });
 
   it("rejects invalid bodies with 400", async () => {
-    await alice.post("/api/v1/quiz").send({ documentId: "one" }).expect(400);
+    await alice.post("/api/v1/jobs").send({ documentId: "one" }).expect(400);
     await alice.put(`/api/v1/quiz/${quiz.id}`).send({ title: "", questions: [] }).expect(400);
     await alice
       .put(`/api/v1/quiz/${quiz.id}`)
@@ -160,7 +237,9 @@ describe("quiz API", () => {
     await bob.put(`/api/v1/quiz/${quiz.id}`).send({ title: "Mine now", questions: [] }).expect(404);
     await bob.get(`/api/v1/quiz/${quiz.id}/export`).expect(404);
     await bob.delete(`/api/v1/quiz/${quiz.id}`).expect(404);
-    await bob.post("/api/v1/quiz").send({ documentId: quiz.documentId }).expect(404);
+    await bob.post("/api/v1/jobs").send({ documentId: quiz.documentId }).expect(404);
+    const { body: aliceDocs } = await alice.get("/api/v1/document").expect(200);
+    await bob.get(`/api/v1/jobs/${aliceDocs.documents[0].latestJob.id}`).expect(404);
 
     const { body } = await bob.get("/api/v1/document").expect(200);
     expect(body.documents).toEqual([]);

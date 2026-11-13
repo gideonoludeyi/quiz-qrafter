@@ -1,6 +1,6 @@
 import type { QuizDraft } from "@quizqrafter/shared";
 
-// Turns an uploaded file (PDF, image, text) into plain text.
+// Turns an uploaded file (PDF, image, Word, text) into plain text.
 export interface TextExtractor {
   extract(content: Buffer, mimeType: string): Promise<string>;
 }
@@ -11,9 +11,12 @@ export interface BlobStore {
   get(url: string): Promise<Buffer>;
 }
 
-// Writes a quiz from the text of a document.
+// Writes a quiz from the text of a document, reporting how many questions are written so far.
 export interface QuizGenerator {
-  generate(documentText: string): Promise<QuizDraft>;
+  generate(
+    documentText: string,
+    onProgress?: (questionsWritten: number) => void,
+  ): Promise<QuizDraft>;
 }
 
 export type Providers = {

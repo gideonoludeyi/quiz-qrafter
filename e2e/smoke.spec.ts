@@ -33,10 +33,13 @@ test("sign up, generate a quiz, edit it, and download the PDF", async ({ page })
     await page.waitForURL("**/dashboard");
   });
 
-  await test.step("upload notes and get a quiz", async () => {
+  await test.step("upload notes and watch the quiz being written", async () => {
     await expect(page.getByText("Upload your notes to generate your first quiz.")).toBeVisible();
     await page.getByLabel("Choose File").setInputFiles(path.join(__dirname, "fixtures/notes.txt"));
     await page.getByRole("button", { name: "Upload & generate" }).click();
+
+    await expect(page.getByText("Making a quiz from notes.txt")).toBeVisible();
+    await expect(page.getByText(/Writing questions: \d+ written so far/)).toBeVisible();
 
     await expect(page.locator("#quiz-title")).toHaveValue("Sample quiz");
     await expect(page.getByTestId(/^question-\d+$/)).toHaveCount(3);
@@ -69,4 +72,37 @@ test("sign up, generate a quiz, edit it, and download the PDF", async ({ page })
     const content = await readFile(await download.path());
     expect(content.subarray(0, 5).toString()).toBe("%PDF-");
   });
+});
+
+test("a failed job shows why and can be retried", async ({ page }) => {
+  const email = `e2e-fail-${Date.now()}@example.com`;
+  await page.goto("/signup");
+  await page.locator("#firstname").pressSequentially("Grace");
+  await page.locator("#lastname").pressSequentially("Hopper");
+  await page.locator("#email").pressSequentially(email);
+  await page.locator("#password").pressSequentially(PASSWORD);
+  await nudge(page.locator("#lastname"));
+  await page.getByRole("button", { name: "Sign up" }).click();
+  await page.waitForURL("**/login");
+  await page.locator("#email").pressSequentially(email);
+  await page.locator("#password").pressSequentially(PASSWORD);
+  await nudge(page.locator("#email"));
+  await page.getByRole("button", { name: "Log in" }).click();
+  await page.waitForURL("**/dashboard");
+
+  // The fake AI fails on notes containing FAKE_FAIL.
+  await page.getByLabel("Choose File").setInputFiles({
+    name: "broken.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("These notes say FAKE_FAIL."),
+  });
+  await page.getByRole("button", { name: "Upload & generate" }).click();
+
+  const alert = page.getByRole("alert").filter({ hasText: "couldn't be made" });
+  await expect(alert).toContainText("The fake AI was asked to fail.");
+  await expect(alert.getByRole("button", { name: "Try again" })).toBeEnabled();
+
+  // The failure is still shown after a reload.
+  await page.reload();
+  await expect(alert).toContainText("The fake AI was asked to fail.");
 });

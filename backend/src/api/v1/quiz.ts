@@ -1,8 +1,8 @@
-import { GenerateQuizRequestSchema, QuizDraftSchema, quizToMarkdown } from "@quizqrafter/shared";
+import { QuizDraftSchema, quizToMarkdown } from "@quizqrafter/shared";
 import { Router } from "express";
 import { z } from "zod";
 import { renderQuizPdf } from "../../core/pdf";
-import { deleteQuiz, generateQuiz, getQuiz, updateQuiz } from "../../core/quizzes";
+import { deleteQuiz, getQuiz, updateQuiz } from "../../core/quizzes";
 import type { Deps } from "../../core/types";
 import { parseId, restrict, userIdOf, wrap } from "./http";
 
@@ -11,16 +11,6 @@ const ExportFormatSchema = z.enum(["pdf", "markdown"]).default("pdf");
 export default function quizRouter(deps: Deps) {
   const router = Router();
   router.use(restrict);
-
-  // Generates a quiz for a document, replacing the document's existing quiz.
-  router.post(
-    "/",
-    wrap(async (req, res) => {
-      const { documentId } = GenerateQuizRequestSchema.parse(req.body);
-      const quiz = await generateQuiz(deps, userIdOf(req), documentId);
-      return res.status(200).json(quiz);
-    }),
-  );
 
   router.get(
     "/:id",

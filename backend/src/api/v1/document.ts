@@ -1,10 +1,14 @@
+import { MAX_UPLOAD_BYTES } from "@quizqrafter/shared";
 import { Router } from "express";
 import multer from "multer";
 import { listDocuments, uploadDocument } from "../../core/documents";
 import type { Deps } from "../../core/types";
 import { restrict, userIdOf, wrap } from "./http";
 
-const multerMiddleware = multer({ storage: multer.memoryStorage() });
+const multerMiddleware = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_UPLOAD_BYTES },
+});
 
 export default function documentRouter(deps: Deps) {
   const router = Router();
@@ -17,13 +21,13 @@ export default function documentRouter(deps: Deps) {
       if (!req.file) return res.status(400 /* Bad Request */).json({ error: "No file uploaded" });
 
       const { originalname, buffer, size, mimetype } = req.file;
-      const document = await uploadDocument(deps, userIdOf(req), {
+      const result = await uploadDocument(deps, userIdOf(req), {
         filename: originalname,
         content: buffer,
         size,
         mimeType: mimetype,
       });
-      return res.status(200).json({ document });
+      return res.status(202 /* Accepted */).json(result);
     }),
   );
 

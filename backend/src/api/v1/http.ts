@@ -1,6 +1,8 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { z } from "zod";
-import { NotFoundError } from "../../core/types";
+import { MAX_UPLOAD_BYTES } from "@quizqrafter/shared";
+import multer from "multer";
+import { NotFoundError, TooManyJobsError, UnsupportedFileError } from "../../core/types";
 
 const IdSchema = z.coerce.number().int().positive();
 
@@ -45,6 +47,17 @@ export function errorHandler(
   }
   if (error instanceof NotFoundError) {
     return response.status(404 /* Not Found */).json({ error: error.message });
+  }
+  if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+    return response
+      .status(413 /* Content Too Large */)
+      .json({ error: `Files can be at most ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB.` });
+  }
+  if (error instanceof UnsupportedFileError) {
+    return response.status(415 /* Unsupported Media Type */).json({ error: error.message });
+  }
+  if (error instanceof TooManyJobsError) {
+    return response.status(429 /* Too Many Requests */).json({ error: error.message });
   }
   console.error(error);
   return response.sendStatus(500);

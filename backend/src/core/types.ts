@@ -14,3 +14,19 @@ export class NotFoundError extends Error {
     this.name = "NotFoundError";
   }
 }
+
+// Thrown when a user already has the maximum number of quiz jobs in progress.
+export class TooManyJobsError extends Error {
+  constructor(limit: number) {
+    super(`You can have at most ${limit} quizzes in progress. Wait for one to finish.`);
+    this.name = "TooManyJobsError";
+  }
+}
+
+// Thrown when an upload is not a file type the app can read.
+export class UnsupportedFileError extends Error {
+  constructor() {
+    super("This file type isn't supported. Upload a PDF, image, Word or text file.");
+    this.name = "UnsupportedFileError";
+  }
+}

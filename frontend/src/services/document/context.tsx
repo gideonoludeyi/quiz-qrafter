@@ -1,4 +1,4 @@
-import type { Document } from "@quizqrafter/shared";
+import type { Document, QuizJob } from "@quizqrafter/shared";
 import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
 import type { DocumentService } from "./types";
 
@@ -6,8 +6,8 @@ type DocumentContextValue = {
   documents: Document[];
   loading: boolean;
   error: Error | null;
-  // Resolves to the uploaded document, or null on failure (with `error` set).
-  upload: (file: File) => Promise<Document | null>;
+  // Resolves to the uploaded document and its job, or null on failure (with `error` set).
+  upload: (file: File) => Promise<{ document: Document; job: QuizJob } | null>;
   // Reloads the document list and resolves to it (empty on failure).
   refresh: () => Promise<Document[]>;
 };
@@ -41,10 +41,10 @@ export function DocumentProvider({ service, children }: DocumentProviderProps) {
     async (file: File) => {
       setLoading(true);
       try {
-        const document = await service.upload(file);
-        setDocuments((current) => [document, ...current]);
+        const result = await service.upload(file);
+        setDocuments((current) => [result.document, ...current]);
         setError(null);
-        return document;
+        return result;
       } catch (err) {
         console.error("Upload failed:", err);
         setError(err instanceof Error ? err : new Error("An unexpected error occurred"));

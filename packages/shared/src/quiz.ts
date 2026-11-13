@@ -53,10 +53,6 @@ export const QuizSchema = QuizDraftSchema.extend({
   updatedAt: z.string(),
 });
 
-export const GenerateQuizRequestSchema = z.object({
-  documentId: z.number().int(),
-});
-
 export type MultipleChoiceQuestion = z.infer<typeof MultipleChoiceQuestionSchema>;
 export type TrueFalseQuestion = z.infer<typeof TrueFalseQuestionSchema>;
 export type ShortAnswerQuestion = z.infer<typeof ShortAnswerQuestionSchema>;

@@ -2,36 +2,31 @@ import type { Config } from "../config";
 import { FakeExtractor } from "./fake/fakeExtractor";
 import { FakeQuizGenerator } from "./fake/fakeQuizGenerator";
 import { FileBlobStore } from "./fake/fileBlobStore";
-import { ClaudeQuizGenerator } from "./real/claudeQuizGenerator";
-import { DocumentAiExtractor } from "./real/documentAiExtractor";
+import { GeminiQuizGenerator } from "./gemini/quizGenerator";
+import { GeminiTextExtractor } from "./gemini/textExtractor";
 import { GcsBlobStore } from "./real/gcsBlobStore";
 import type { Providers } from "./types";
 
-// Builds the real or fake providers, depending on config.
+// Builds the storage and AI providers that config selects.
 export function createProviders(config: Config): Providers {
-  const generator =
-    config.quizGenerator === "fake"
-      ? new FakeQuizGenerator()
-      : new ClaudeQuizGenerator(config.anthropic.model);
+  const blobs =
+    config.storage === "local"
+      ? new FileBlobStore(config.localDataDir)
+      : // loadConfig has already checked the credentials are set for gcs.
+        new GcsBlobStore(config.gcs.documentsBucket, config.gcs.credentialsFile!);
 
-  if (config.providers === "fake") {
+  if (config.ai === "fake") {
     return {
-      extractor: new FakeExtractor(),
-      blobs: new FileBlobStore(config.fakeDataDir),
-      generator,
+      blobs,
+      extractor: new FakeExtractor(config.fakeAiDelayMs),
+      generator: new FakeQuizGenerator(config.fakeAiDelayMs),
     };
   }
-
-  // loadConfig has already checked these are set when providers are real.
-  const { gcloud } = config;
+  // loadConfig has already checked the API key is set for gemini.
+  const apiKey = config.gemini.apiKey!;
   return {
-    extractor: new DocumentAiExtractor({
-      projectId: gcloud.projectId!,
-      location: gcloud.location,
-      processorId: gcloud.documentProcessorId!,
-      credentialsFile: gcloud.credentialsFile!,
-    }),
-    blobs: new GcsBlobStore(gcloud.documentsBucket, gcloud.credentialsFile!),
-    generator,
+    blobs,
+    extractor: new GeminiTextExtractor(apiKey, config.gemini.model),
+    generator: new GeminiQuizGenerator(apiKey, config.gemini.model),
   };
 }

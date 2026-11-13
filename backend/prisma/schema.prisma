@@ -26,13 +26,16 @@ model User {
 model Document {
     id               Int      @id @default(autoincrement())
     filename         String
+    mimeType         String
     size             Int
-    transcriptionURL String
+    // Null until a quiz job has read the file.
+    transcriptionURL String?
     rawURL           String
-    createdAt        DateTime @default(now())
+    createdAt        DateTime  @default(now())
     userId           Int
-    user             User     @relation(fields: [userId], references: [id])
+    user             User      @relation(fields: [userId], references: [id])
     quiz             Quiz?
+    jobs             QuizJob[]
 
     @@map("documents")
 }
@@ -70,4 +73,40 @@ model Question {
 
     @@index([quizId])
     @@map("questions")
+}
+
+enum JobStatus {
+    queued
+    running
+    succeeded
+    failed
+}
+
+enum JobStage {
+    reading
+    writing
+    saving
+}
+
+// One run of reading a document and writing its quiz. At most one per
+// document is queued or running (a partial unique index in the migration).
+model QuizJob {
+    id               Int       @id @default(autoincrement())
+    document         Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+    documentId       Int
+    status           JobStatus @default(queued)
+    stage            JobStage?
+    questionsWritten Int       @default(0)
+    attempts         Int       @default(0)
+    runAfter         DateTime  @default(now())
+    heartbeatAt      DateTime?
+    // A message safe to show the user.
+    error            String?
+    createdAt        DateTime  @default(now())
+    updatedAt        DateTime  @updatedAt
+    finishedAt       DateTime?
+
+    @@index([status, runAfter])
+    @@index([documentId])
+    @@map("quiz_jobs")
 }

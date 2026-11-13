@@ -1,8 +1,10 @@
-// Throws with the server's error message (or the fallback) when a response is not OK.
+// Throws with the server's error message (or the fallback and status) when a response is not OK.
 export async function expectOk(response: Response, fallback: string): Promise<Response> {
   if (response.ok) return response;
   const body = await response.json().catch(() => null);
-  throw new Error(typeof body?.error === "string" ? body.error : fallback);
+  throw new Error(
+    typeof body?.error === "string" ? body.error : `${fallback} (${response.status})`,
+  );
 }
 
 // Saves a blob to the user's device under the given filename.

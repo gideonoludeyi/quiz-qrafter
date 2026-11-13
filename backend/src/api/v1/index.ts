@@ -6,6 +6,7 @@ import type { Config } from "../../config";
 import type { Deps } from "../../core/types";
 import authRouter from "./auth";
 import documentRouter from "./document";
+import jobRouter from "./jobs";
 import quizRouter from "./quiz";
 
 // Sessions live in Redis when REDIS_URL is set, otherwise in memory.
@@ -30,6 +31,7 @@ export default function v1Router(config: Config, deps: Deps) {
     session({
       store: createSessionStore(config.redisUrl),
       resave: false, // don't save session if unmodified
+      rolling: true, // any request, including polling a job, extends the session
       saveUninitialized: false,
       secret: config.sessionSecret,
       cookie: {
@@ -43,6 +45,7 @@ export default function v1Router(config: Config, deps: Deps) {
   router.use("/auth", authRouter(deps));
   router.use("/document", documentRouter(deps));
   router.use("/quiz", quizRouter(deps));
+  router.use("/jobs", jobRouter(deps));
 
   return router;
 }
