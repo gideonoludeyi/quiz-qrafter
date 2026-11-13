@@ -34,6 +34,10 @@ release. Add a tool name to select part of the graph. For example, run
 
 Keep project-specific notes below the `VITE PLUS END` marker. `vp install` regenerates everything between the markers.
 
+Write these notes above the level of the code: describe behavior, rules and intent, not where they are implemented. Name commands, environment variables, ports, API endpoints and named constants, but not functions, files, classes, tables or indexes; those get renamed and the notes would go stale silently. The code should explain itself.
+
+Record what a collaborator's agent needs in this repo (here, in code, or in issues and pull requests), not in an agent's private memory.
+
 ## Adding Vite Plugins (npm Peer Conflicts)
 
 The `vite` alias points at `@voidzero-dev/vite-plus-core@1.x`, which bundles Vite 8 but reports version `1.x`. npm checks plugin peer ranges such as `vite@"^5 || ^6 || ^7 || ^8"` against `1.x`, so `vp add <vite-plugin>` fails with `ERESOLVE`. Overrides do not fix this.
@@ -94,3 +98,7 @@ The backend uses better-auth, mounted at `/api/auth/*`, and the frontend uses be
 `packages/shared` holds the schemas for quizzes, documents and jobs, used by both the backend and the frontend. Change a schema there, never in one app only.
 
 The package has no build step: the backend and frontend compile it from its TypeScript source, and the backend's production build bundles it in. Edits take effect right away, in development and in tests.
+
+## Database Migrations
+
+The user creates migrations in their own terminal, from `backend/`, with `npx prisma migrate dev --name <snake_case_name>`, and approves its prompt when a change can lose data. To review the SQL first, add `--create-only`, edit the generated migration (a rename comes out as a drop and an add), then run `npx prisma migrate dev` to apply it. When a change needs a migration, an agent edits the schema and hands the user the exact command to run.
