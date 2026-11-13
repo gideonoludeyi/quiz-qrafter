@@ -1,0 +1,42 @@
+import { existsSync } from "node:fs";
+import { chromium, defineConfig } from "@playwright/test";
+import { testDatabaseUrl } from "./backend/test/testDatabase";
+
+// Use Playwright's own Chromium if it has been downloaded (`npx playwright install chromium`),
+// otherwise the installed Chrome. PLAYWRIGHT_CHANNEL overrides both.
+const channel =
+  process.env.PLAYWRIGHT_CHANNEL ?? (existsSync(chromium.executablePath()) ? undefined : "chrome");
+
+// Ports chosen to stay clear of a dev server already running on 3000/8080.
+const WEB_PORT = 3100;
+const API_PORT = 8090;
+
+export default defineConfig({
+  testDir: "e2e",
+  timeout: 60_000,
+  use: {
+    baseURL: `http://localhost:${WEB_PORT}`,
+    channel,
+    trace: "retain-on-failure",
+  },
+  webServer: [
+    {
+      // The backend runs with fake providers, so no Google Cloud or Claude credentials are needed.
+      command: "npm run dev --workspace=backend",
+      url: `http://localhost:${API_PORT}/healthz`,
+      env: {
+        PROVIDERS: "fake",
+        PORT: String(API_PORT),
+        FRONTEND_URL: `http://localhost:${WEB_PORT}`,
+        DATABASE_URL: testDatabaseUrl(),
+        REDIS_URL: "",
+      },
+    },
+    {
+      command: `npx vp dev --port ${WEB_PORT} --strictPort`,
+      cwd: "frontend",
+      url: `http://localhost:${WEB_PORT}`,
+      env: { VITE_API_URL: `http://localhost:${API_PORT}` },
+    },
+  ],
+});

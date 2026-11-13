@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -84,12 +85,12 @@ const SignUp = () => {
 
     if (isValid) {
       try {
-        signUp(email, password, fullname);
+        await signUp(email, password, fullname);
         setValidation(true);
         navigate("/login", { replace: true });
         setError({});
-      } catch (error: any) {
-        setError({ general: error.message });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not sign up.");
       }
     }
   };

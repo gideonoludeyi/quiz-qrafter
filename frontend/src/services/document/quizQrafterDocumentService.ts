@@ -1,9 +1,15 @@
+import {
+  type Document,
+  ListDocumentsResponseSchema,
+  UploadDocumentResponseSchema,
+} from "@quizqrafter/shared";
+import { expectOk } from "../http";
 import type { DocumentService } from "./types";
 
 export class QuizQrafterDocumentService implements DocumentService {
   constructor(private readonly baseURL: URL) {}
 
-  async upload(file: File): Promise<{ quizMarkdown: string }> {
+  async upload(file: File): Promise<Document> {
     const formData = new FormData();
     formData.append("file", file);
 
@@ -11,16 +17,18 @@ export class QuizQrafterDocumentService implements DocumentService {
       method: "POST",
       credentials: "include",
       body: formData,
-      headers: {
-        Accept: "application/json",
-      },
+      headers: { Accept: "application/json" },
     });
+    await expectOk(response, "Failed to upload file");
+    return UploadDocumentResponseSchema.parse(await response.json()).document;
+  }
 
-    if (!response.ok) {
-      throw new Error("Failed to upload file");
-    }
-
-    const result = await response.json();
-    return { quizMarkdown: result.quizMarkdown }; // Assuming the backend sends this key
+  async list(): Promise<Document[]> {
+    const response = await fetch(new URL("/api/v1/document", this.baseURL), {
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    });
+    await expectOk(response, "Failed to load your documents");
+    return ListDocumentsResponseSchema.parse(await response.json()).documents;
   }
 }

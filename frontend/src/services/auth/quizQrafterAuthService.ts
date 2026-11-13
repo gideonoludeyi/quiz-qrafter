@@ -1,3 +1,4 @@
+import { expectOk } from "../http";
 import type { AuthService, LoginCredentials, SignUpInfo, User } from "./types";
 
 export class QuizQrafterAuthService implements AuthService {
@@ -17,7 +18,7 @@ export class QuizQrafterAuthService implements AuthService {
   }
 
   async signUp(info: SignUpInfo): Promise<void> {
-    await fetch(new URL("/api/v1/auth/signup", this.baseURL), {
+    const response = await fetch(new URL("/api/v1/auth/signup", this.baseURL), {
       method: "POST",
       credentials: "include",
       headers: {
@@ -29,6 +30,7 @@ export class QuizQrafterAuthService implements AuthService {
         fullname: info.fullname,
       }),
     });
+    await expectOk(response, "Could not create the account. The email may already be in use.");
   }
 
   async login(credentials: LoginCredentials): Promise<User> {
@@ -43,6 +45,7 @@ export class QuizQrafterAuthService implements AuthService {
         password: credentials.password,
       }),
     });
+    await expectOk(response, "Invalid email or password.");
     const { email, fullname } = await response.json();
     return {
       email: email,

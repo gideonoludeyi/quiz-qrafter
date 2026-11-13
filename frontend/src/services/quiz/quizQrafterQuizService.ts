@@ -1,65 +1,57 @@
+import { type Quiz, type QuizDraft, QuizSchema } from "@quizqrafter/shared";
+import { expectOk } from "../http";
 import type { QuizService } from "./types";
+
+const JSON_HEADERS = { "Content-Type": "application/json", Accept: "application/json" };
 
 export class QuizQrafterQuizService implements QuizService {
   constructor(private readonly baseURL: URL) {}
 
-  async generateMD(filename: string): Promise<string> {
-    const url = new URL(`/api/v1/quiz/new`, this.baseURL);
-    const res = await fetch(url, {
+  async generate(documentId: number): Promise<Quiz> {
+    const res = await fetch(new URL("/api/v1/quiz", this.baseURL), {
       method: "POST",
       credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "text/markdown",
-      },
-      body: JSON.stringify({
-        filename,
-      }),
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ documentId }),
     });
-    const markdown = await res.text();
-    return markdown;
+    await expectOk(res, "Failed to generate the quiz");
+    return QuizSchema.parse(await res.json());
   }
 
-  async generatePDF(filename: string): Promise<File> {
-    const url = new URL(`/api/v1/quiz/new`, this.baseURL);
-    const res = await fetch(url, {
-      method: "POST",
+  async get(id: number): Promise<Quiz> {
+    const res = await fetch(new URL(`/api/v1/quiz/${id}`, this.baseURL), {
       credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/octet-stream",
-      },
-      body: JSON.stringify({
-        filename,
-      }),
+      headers: { Accept: "application/json" },
     });
-    const blob = await res.blob();
-    return new File([blob], filename);
+    await expectOk(res, "Failed to load the quiz");
+    return QuizSchema.parse(await res.json());
   }
 
-  async downloadMD(filename: string): Promise<string> {
-    const url = new URL(`/api/v1/quiz/download/${filename}`, this.baseURL);
-    const res = await fetch(url, {
-      method: "GET",
+  async update(id: number, draft: QuizDraft): Promise<Quiz> {
+    const res = await fetch(new URL(`/api/v1/quiz/${id}`, this.baseURL), {
+      method: "PUT",
       credentials: "include",
-      headers: {
-        Accept: "text/markdown",
-      },
+      headers: JSON_HEADERS,
+      body: JSON.stringify(draft),
     });
-    const markdown = await res.text();
-    return markdown;
+    await expectOk(res, "Failed to save the quiz");
+    return QuizSchema.parse(await res.json());
   }
 
-  async downloadPDF(filename: string): Promise<File> {
-    const url = new URL(`/api/v1/quiz/download/${filename}`, this.baseURL);
-    const res = await fetch(url, {
-      method: "GET",
+  async remove(id: number): Promise<void> {
+    const res = await fetch(new URL(`/api/v1/quiz/${id}`, this.baseURL), {
+      method: "DELETE",
       credentials: "include",
-      headers: {
-        Accept: "application/pdf",
-      },
     });
-    const blob = await res.blob();
-    return new File([blob], filename);
+    await expectOk(res, "Failed to delete the quiz");
+  }
+
+  async exportPdf(id: number): Promise<Blob> {
+    const res = await fetch(new URL(`/api/v1/quiz/${id}/export?format=pdf`, this.baseURL), {
+      credentials: "include",
+      headers: { Accept: "application/pdf" },
+    });
+    await expectOk(res, "Failed to download the PDF");
+    return res.blob();
   }
 }

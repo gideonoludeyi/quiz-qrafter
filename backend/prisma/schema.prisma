@@ -24,22 +24,50 @@ model User {
 }
 
 model Document {
-    id               Int    @id @default(autoincrement())
+    id               Int      @id @default(autoincrement())
+    filename         String
     size             Int
     transcriptionURL String
     rawURL           String
+    createdAt        DateTime @default(now())
     userId           Int
-    user             User   @relation(fields: [userId], references: [id])
+    user             User     @relation(fields: [userId], references: [id])
     quiz             Quiz?
 
     @@map("documents")
 }
 
 model Quiz {
-    id         Int      @id @default(autoincrement())
-    urlPdf     String
-    document   Document @relation(fields: [documentId], references: [id])
-    documentId Int      @unique
+    id         Int        @id @default(autoincrement())
+    title      String
+    createdAt  DateTime   @default(now())
+    updatedAt  DateTime   @updatedAt
+    document   Document   @relation(fields: [documentId], references: [id])
+    documentId Int        @unique
+    questions  Question[]
 
     @@map("quizzes")
+}
+
+enum QuestionType {
+    multiple_choice
+    true_false
+    short_answer
+}
+
+model Question {
+    id          Int          @id @default(autoincrement())
+    position    Int
+    type        QuestionType
+    prompt      String
+    choices     String[]
+    // multiple_choice: index of the correct choice; true_false: boolean; short_answer: string
+    answer      Json
+    explanation String
+    sourceQuote String?
+    quiz        Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+    quizId      Int
+
+    @@index([quizId])
+    @@map("questions")
 }

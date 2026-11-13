@@ -21,14 +21,6 @@ release. Add a tool name to select part of the graph. For example, run
 `vp toolchain vite`. Use `--global` to ignore the local `vite-plus` package. Use
 `vp why <package>` to show the package-manager dependency graph.
 
-## Adding Vite Plugins (npm Peer Conflicts)
-
-The `vite` alias points at `@voidzero-dev/vite-plus-core@1.x`, which bundles Vite 8 but reports version `1.x`. npm checks plugin peer ranges such as `vite@"^5 || ^6 || ^7 || ^8"` against `1.x`, so `vp add <vite-plugin>` fails with `ERESOLVE`. Overrides do not fix this.
-
-To add or upgrade a Vite plugin, edit `package.json` by hand and run `npm install --legacy-peer-deps` from the repo root. Do not set `legacy-peer-deps` in `.npmrc`, because that turns off peer checks for the whole repo. After the lockfile is updated, a plain `vp install` works.
-
-Remove this workaround after upgrading to a Vite+ release that includes [PR #3317](https://github.com/voidzero-dev/vite-plus/pull/3317), which aligns the core version with the bundled Vite version. Tracking issue: [#2806](https://github.com/voidzero-dev/vite-plus/issues/2806).
-
 ## Review Checklist
 
 - [ ] Run `vp install` after pulling remote changes and before getting started.
@@ -37,3 +29,31 @@ Remove this workaround after upgrading to a Vite+ release that includes [PR #331
 - [ ] If setup, runtime, or package-manager behavior looks wrong, run `vp env doctor` and include its output when asking for help.
 
 <!--VITE PLUS END-->
+
+# Project Notes
+
+Keep project-specific notes below the `VITE PLUS END` marker. `vp install` regenerates everything between the markers.
+
+## Adding Vite Plugins (npm Peer Conflicts)
+
+The `vite` alias points at `@voidzero-dev/vite-plus-core@1.x`, which bundles Vite 8 but reports version `1.x`. npm checks plugin peer ranges such as `vite@"^5 || ^6 || ^7 || ^8"` against `1.x`, so `vp add <vite-plugin>` fails with `ERESOLVE`. Overrides do not fix this.
+
+To add or upgrade a Vite plugin, edit `package.json` by hand and run `npm install --legacy-peer-deps` from the repo root. Do not set `legacy-peer-deps` in `.npmrc`, because that turns off peer checks for the whole repo. After the lockfile is updated, a plain `vp install` works.
+
+Remove this workaround after upgrading to a Vite+ release that includes [PR #3317](https://github.com/voidzero-dev/vite-plus/pull/3317), which aligns the core version with the bundled Vite version. Tracking issue: [#2806](https://github.com/voidzero-dev/vite-plus/issues/2806).
+
+## Running Offline (No Cloud Accounts)
+
+The backend can run without Google Cloud or the Claude API. Set `PROVIDERS=fake` in `backend/.env`: uploads are stored under `backend/.data/`, text files are read as-is, and quiz generation returns a fixed three-question quiz. Postgres still runs locally.
+
+- `docker compose up -d` starts Postgres and Redis.
+- `vp run dev` builds `packages/shared` first, then starts the backend (port 8080) and frontend (port 3000).
+- `vpx scripts/seed.ts` (from `backend/`) creates `demo@example.com` / `Password1` with a document and a quiz.
+- `vp test` runs the shared unit tests and the backend API tests. The API tests use a separate `test` schema in the local Postgres.
+- `vp run e2e` runs the Playwright smoke test against its own servers on ports 3100 and 8090, with fake providers. It uses Playwright's Chromium if you have run `npx playwright install chromium`, and your installed Chrome otherwise.
+
+To generate quizzes with Claude while storage and text extraction stay fake, also set `QUIZ_GENERATOR=real` and `ANTHROPIC_API_KEY`. `PROVIDERS=real` additionally needs the Google Cloud variables in `backend/.env.example`.
+
+## Shared Schemas
+
+`packages/shared` holds the zod schemas for quizzes and documents, used by both the backend and the frontend. Change a schema there, never in one app only. Run `vp run --filter @quizqrafter/shared build` after editing it; `vp run dev` does this once at startup and does not watch for changes.

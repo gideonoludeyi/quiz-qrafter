@@ -1,38 +1,19 @@
-import cors from "cors";
-import express from "express";
-
-import v1Router from "./api/v1";
+import { createApp } from "./app";
+import { loadConfig } from "./config";
 import prisma from "./database";
+import { createProviders } from "./providers";
 
-const { PORT = "8080", FRONTEND_URL } = process.env;
+const config = loadConfig();
+const app = createApp(config, { prisma, providers: createProviders(config) });
 
-const app = express();
-
-if (process.env.NODE_ENV === "production") {
-  app.set("trust proxy", 1); // trust first proxy
-}
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-app.use(
-  cors({
-    origin: FRONTEND_URL,
-    credentials: true,
-  }),
-);
-
-app.get("/healthz", (_req, res) => {
-  return res.sendStatus(200);
-});
-
-app.use("/api/v1", v1Router);
-
-const server = app.listen(parseInt(PORT, 10), () => {
-  console.log(`Live on PORT ${PORT}`);
+const server = app.listen(config.port, () => {
+  console.log(
+    `Live on PORT ${config.port} (${config.providers} providers, ${config.quizGenerator} quiz generator)`,
+  );
 });
 
 server.on("close", () => {
-  prisma.$disconnect();
+  void prisma.$disconnect();
 });
 
 process.on("SIGTERM", () => {

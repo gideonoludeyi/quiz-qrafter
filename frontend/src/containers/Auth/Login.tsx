@@ -65,11 +65,11 @@ const Login = () => {
 
     if (isValid) {
       try {
-        login(email, password);
+        await login(email, password);
         setValidation(true);
         setError({});
-      } catch (error: any) {
-        setError({ general: error.message });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not log in.");
       }
     }
   };

@@ -2,19 +2,17 @@ import RedisStore from "connect-redis";
 import { Router } from "express";
 import session, { MemoryStore, type Store } from "express-session";
 import { createClient } from "redis";
+import type { Config } from "../../config";
+import type { Deps } from "../../core/types";
 import authRouter from "./auth";
 import documentRouter from "./document";
 import quizRouter from "./quiz";
 
-const { SESSION_SECRET = "secret", REDIS_URL } = process.env;
+// Sessions live in Redis when REDIS_URL is set, otherwise in memory.
+function createSessionStore(redisUrl: string | undefined): Store {
+  if (redisUrl === undefined) return new MemoryStore();
 
-const router = Router();
-
-let sessionStore: Store;
-if (REDIS_URL !== undefined || REDIS_URL !== "") {
-  const redisClient = createClient({
-    url: REDIS_URL,
-  });
+  const redisClient = createClient({ url: redisUrl });
   redisClient.on("error", (err) => {
     console.error(`Could not establish a connection with redis. ${err}`);
   });
@@ -22,29 +20,29 @@ if (REDIS_URL !== undefined || REDIS_URL !== "") {
     console.log("Connected to redis successfully");
   });
   redisClient.connect().catch((err) => console.error(err));
-  sessionStore = new RedisStore({
-    client: redisClient,
-  });
-} else {
-  sessionStore = new MemoryStore();
+  return new RedisStore({ client: redisClient });
 }
 
-router.use(
-  session({
-    store: sessionStore,
-    resave: false, // don't save session if unmodified
-    saveUninitialized: false,
-    secret: SESSION_SECRET,
-    cookie: {
-      maxAge: 10 * 60 * 1000, // 10 minutes
-      sameSite: process.env.NODE_ENV === "production" ? "none" : undefined,
-      secure: process.env.NODE_ENV === "production",
-    },
-  }),
-);
+export default function v1Router(config: Config, deps: Deps) {
+  const router = Router();
 
-router.use("/auth", authRouter);
-router.use("/document", documentRouter);
-router.use("/quiz", quizRouter);
+  router.use(
+    session({
+      store: createSessionStore(config.redisUrl),
+      resave: false, // don't save session if unmodified
+      saveUninitialized: false,
+      secret: config.sessionSecret,
+      cookie: {
+        maxAge: 10 * 60 * 1000, // 10 minutes
+        sameSite: config.isProduction ? "none" : undefined,
+        secure: config.isProduction,
+      },
+    }),
+  );
 
-export default router;
+  router.use("/auth", authRouter(deps));
+  router.use("/document", documentRouter(deps));
+  router.use("/quiz", quizRouter(deps));
+
+  return router;
+}

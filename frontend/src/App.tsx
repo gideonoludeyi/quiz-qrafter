@@ -8,7 +8,10 @@ import ForgotPassword from "./containers/Auth/ForgotPassword";
 import UpdatePassword from "./containers/Auth/UpdatePassword";
 
 function App() {
-  const { authenticated } = useAuth();
+  const { authenticated, initializing } = useAuth();
+
+  // Wait for the session check, so a logged-in user is not bounced to /login on refresh.
+  if (initializing) return null;
 
   return (
     <Router>
