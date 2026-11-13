@@ -15,7 +15,7 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import { createApp } from "../src/app";
 import { loadConfig } from "../src/config";
-import { runNextJob } from "../src/core/jobs";
+import { runQuizJob } from "../src/core/jobs";
 import { createProviders } from "../src/providers";
 import type { ConsoleEmailSender } from "../src/providers/email/consoleEmailSender";
 import { testDatabaseUrl } from "./testDatabase";
@@ -29,14 +29,19 @@ const config = loadConfig({
   LOCAL_DATA_DIR: mkdtempSync(path.join(tmpdir(), "quizqrafter-test-")),
 });
 const prisma = new PrismaClient({ datasources: { db: { url: testDatabaseUrl() } } });
-const deps = { prisma, providers: createProviders(config) };
+// Holds queued jobs for runJobs, standing in for BullMQ (covered in jobs.test.ts and e2e).
+const queued: number[] = [];
+const queue = { add: async (quizJobId: number) => void queued.push(quizJobId) };
+const deps = { prisma, queue, providers: createProviders(config) };
 const extract = vi.spyOn(deps.providers.extractor, "extract");
 // A Node server around the Hono app, for supertest.
 const app = createAdaptorServer({ fetch: createApp(config, deps).fetch });
 
-// Runs every due job, as the worker would.
+// Runs every queued job, as a worker would.
 async function runJobs() {
-  while (await runNextJob(deps));
+  for (const quizJobId of queued.splice(0)) {
+    await runQuizJob(deps, quizJobId, { claim: 1, lastAttempt: true });
+  }
 }
 
 // better-auth only accepts sign-in requests from trusted origins (FRONTEND_URL).

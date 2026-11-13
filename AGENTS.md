@@ -46,33 +46,35 @@ Remove this workaround after upgrading to a Vite+ release that includes [PR #331
 
 The backend can run without Google Cloud or the Gemini API. In `backend/.env`, set `STORAGE=local` (files go under `backend/.data/`) and `AI=fake` (text and Word files are read as-is, PDFs and images become sample text, and every quiz is the same three questions). Postgres still runs locally.
 
-- `docker compose up -d` starts Postgres and Redis.
-- `vp run dev` builds `packages/shared` first, then starts the backend (port 8080, with the job worker inside it) and frontend (port 3000).
+- `docker compose up -d` starts Postgres, the only service the app needs.
+- `vp run dev` builds `packages/shared` first, then starts the backend API (port 8080), one quiz worker (health check on 8081) and the frontend (port 3000). The API and worker restart on their own when backend code changes.
 - `vpx scripts/seed.ts` (from `backend/`) creates `demo@example.com` / `Password1` with a document and a quiz.
 - Password reset links appear in the backend log (`EMAIL=console`).
 - `vp test` runs the shared unit tests and the backend tests. The backend tests use a separate `test` schema in the local Postgres.
-- `vp run e2e` runs the Playwright smoke tests against their own servers on ports 3100 and 8090, with `AI=fake`. It uses Playwright's Chromium if you have run `npx playwright install chromium`, and your installed Chrome otherwise.
+- `vp run e2e` runs the Playwright smoke tests against their own servers (frontend 3100, API 8090, worker 8091), with `AI=fake`. It uses Playwright's Chromium if you have run `npx playwright install chromium`, and your installed Chrome otherwise.
 
 `AI=gemini` (the default) needs `GEMINI_API_KEY`; `LLM_MODEL` picks the Gemini model (default `gemini-4-hydrogen`). It works with either storage setting. `STORAGE=gcs` (the default) needs `GOOGLE_APPLICATION_CREDENTIALS`.
 
 ## Quiz Jobs
 
-Uploading a file queues a quiz job in the `quiz_jobs` table. A worker claims it, has Gemini read the file (PDFs and images; text and Word files are read locally), writes the quiz, and saves it. The browser polls `GET /api/v1/jobs/:id` for progress.
+Uploading a file records a quiz job and sends it to a [BullMQ](https://docs.bullmq.io/) queue. BullMQ uses its [Postgres backend](https://docs.bullmq.io/guide/postgresql), with its tables in their own schema (`QUEUE_SCHEMA`, default `bullmq`) of the app's database; there is no Redis. A worker takes the job, has Gemini read the file (PDFs and images; text and Word files are read locally), writes the quiz, and saves it. The browser polls `GET /api/v1/jobs/:id` for progress.
 
-- The worker runs inside the API server unless `WORKER=off`; `npm run worker --workspace=backend` runs it on its own.
-- Failures that a retry can't fix (a refusal, a file too long to read, an unsupported file) throw `PermanentJobError`, whose message is shown to the user. Any other error is retried twice, 30 s and then 60 s later.
-- A job whose worker stops sending heartbeats for 2 minutes is requeued.
+- The API never runs jobs. Workers are separate processes: `npm run worker --workspace=backend`. Run as many as you like; each runs `WORKER_CONCURRENCY` jobs at once and serves `GET /healthz` on `WORKER_PORT`.
+- The app's own job record is what users see (status, stage, progress, error). BullMQ only delivers, retries and recovers jobs.
+- Failures a retry can't fix (a refusal, a file too long to read, an unsupported file) fail the job at once with a message shown to the user. Any other error is retried twice, 30 s and then 60 s later.
+- If a worker dies mid-job, BullMQ hands the job to another worker, and writes from the old run are ignored.
+- When a worker starts, it re-sends unfinished jobs that never reached the queue and fails ones BullMQ gave up on.
 - `FAKE_AI_DELAY_MS` slows the fake AI so progress is visible; the fake AI fails on notes containing `FAKE_FAIL`.
 
 ## Authentication
 
-The backend (Hono) uses better-auth, mounted at `/api/auth/*`; the frontend talks to it through `better-auth/react` (`frontend/src/services/auth/authClient.ts`). Sessions are stored in Postgres and last 7 days. API routes under `/api/v1` require a session (`restrict` in `backend/src/api/v1/http.ts`).
+The backend uses better-auth, mounted at `/api/auth/*`, and the frontend uses better-auth's React client. Sessions are stored in Postgres and last 7 days. Everything under `/api/v1` requires a session.
 
 - Passwords are hashed with bcrypt, which users created before better-auth were hashed with.
-- IDs are serial integers (`generateId: "serial"`), so `users.id` and everything that references it are numbers.
-- Password reset emails go through the email provider: `EMAIL=console` (the default) prints the link to the backend log, `EMAIL=resend` sends it with Resend and needs `RESEND_API_KEY`. `EMAIL_FROM` sets the sender; the default, Resend's test address `onboarding@resend.dev`, only delivers to the Resend account owner's email.
+- User IDs are serial integers, not strings, and so is everything that references them.
+- Password reset emails: `EMAIL=console` (the default) prints the link to the backend log, and `EMAIL=resend` sends it with Resend and needs `RESEND_API_KEY`. `EMAIL_FROM` sets the sender. The default sender, Resend's test address `onboarding@resend.dev`, only delivers to the Resend account owner's email.
 - better-auth only accepts sign-in requests from `FRONTEND_URL` origins. Requests without a trusted `Origin` header (e.g. curl, tests) need one set.
 
 ## Shared Schemas
 
-`packages/shared` holds the zod schemas for quizzes and documents, used by both the backend and the frontend. Change a schema there, never in one app only. Run `vp run --filter @quizqrafter/shared build` after editing it; `vp run dev` does this once at startup and does not watch for changes.
+`packages/shared` holds the schemas for quizzes, documents and jobs, used by both the backend and the frontend. Change a schema there, never in one app only. Run `vp run --filter @quizqrafter/shared build` after editing it; `vp run dev` does this once at startup and does not watch for changes.

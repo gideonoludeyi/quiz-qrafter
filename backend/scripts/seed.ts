@@ -3,7 +3,7 @@
 import { createAuth } from "../src/auth";
 import { loadConfig } from "../src/config";
 import { uploadDocument } from "../src/core/documents";
-import { getQuizJob, runNextJob } from "../src/core/jobs";
+import { getQuizJob, runQuizJob } from "../src/core/jobs";
 import prisma from "../src/database";
 import { FAKE_SAMPLE_TEXT } from "../src/providers/fake/fakeExtractor";
 import { createProviders } from "../src/providers";
@@ -18,7 +18,10 @@ async function main() {
     AI: "fake",
     FAKE_AI_DELAY_MS: "0",
   });
-  const deps = { prisma, providers: createProviders(config) };
+  // Collects queued jobs to run here instead of sending them to a worker.
+  const queued: number[] = [];
+  const queue = { add: async (quizJobId: number) => void queued.push(quizJobId) };
+  const deps = { prisma, queue, providers: createProviders(config) };
 
   // Sign up through better-auth, so the demo user has a password account like any other user.
   if ((await prisma.user.findUnique({ where: { email: EMAIL } })) === null) {
@@ -35,8 +38,9 @@ async function main() {
     size: content.length,
     mimeType: "text/plain",
   });
-  // Run queued jobs here instead of waiting for a worker.
-  while (await runNextJob(deps));
+  for (const quizJobId of queued) {
+    await runQuizJob(deps, quizJobId, { claim: 1, lastAttempt: true });
+  }
   const finished = await getQuizJob(deps, user.id, job.id);
 
   console.error(`Seeded ${EMAIL} / ${PASSWORD}; quiz job ${job.id} ${finished.status}.`);

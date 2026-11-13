@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { chromium, defineConfig } from "@playwright/test";
 import { RENAMED_VARS } from "./backend/src/config";
-import { testDatabaseUrl } from "./backend/test/testDatabase";
+import { testDatabaseUrl, testQueueSettings } from "./backend/test/testDatabase";
 
 // Use Playwright's own Chromium if it has been downloaded (`npx playwright install chromium`),
 // otherwise the installed Chrome. PLAYWRIGHT_CHANNEL overrides both.
@@ -11,6 +11,7 @@ const channel =
 // Ports chosen to stay clear of a dev server already running on 3000/8080.
 const WEB_PORT = 3100;
 const API_PORT = 8090;
+const WORKER_PORT = 8091;
 
 export default defineConfig({
   testDir: "e2e",
@@ -22,7 +23,8 @@ export default defineConfig({
   },
   webServer: [
     {
-      // Local storage and the fake AI, so no Google Cloud or Gemini credentials are needed.
+      // The API and a quiz worker, with local storage and the fake AI, so no Google Cloud or
+      // Gemini credentials are needed.
       command: "npm run dev --workspace=backend",
       url: `http://localhost:${API_PORT}/healthz`,
       env: {
@@ -37,7 +39,9 @@ export default defineConfig({
         PORT: String(API_PORT),
         FRONTEND_URL: `http://localhost:${WEB_PORT}`,
         DATABASE_URL: testDatabaseUrl(),
-        REDIS_URL: "",
+        QUEUE_SCHEMA: testQueueSettings().schema,
+        WORKER_PORT: String(WORKER_PORT),
+        WORKER_CONCURRENCY: "2",
       },
     },
     {

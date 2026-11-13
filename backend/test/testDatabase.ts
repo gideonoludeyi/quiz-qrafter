@@ -17,3 +17,6 @@ export function testDatabaseUrl(): string {
   url.searchParams.set("schema", "test");
   return url.href;
 }
+
+// The test queue: the test database, with BullMQ's tables in their own schema.
+export const testQueueSettings = () => ({ databaseUrl: testDatabaseUrl(), schema: "bullmq_test" });

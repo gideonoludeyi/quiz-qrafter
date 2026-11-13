@@ -154,16 +154,15 @@ model QuizJob {
     status           JobStatus @default(queued)
     stage            JobStage?
     questionsWritten Int       @default(0)
+    // The BullMQ run that owns this job; writes from older runs are ignored.
     attempts         Int       @default(0)
-    runAfter         DateTime  @default(now())
-    heartbeatAt      DateTime?
     // A message safe to show the user.
     error            String?
     createdAt        DateTime  @default(now())
     updatedAt        DateTime  @updatedAt
     finishedAt       DateTime?
 
-    @@index([status, runAfter])
+    @@index([status])
     @@index([documentId])
     @@map("quiz_jobs")
 }

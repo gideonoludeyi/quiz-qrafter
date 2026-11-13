@@ -3,24 +3,18 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import type { QuizDraft } from "@quizqrafter/shared";
-import { afterAll, beforeEach, describe, expect, it } from "vite-plus/test";
+import { afterAll, afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { uploadDocument } from "../src/core/documents";
-import {
-  MAX_ACTIVE_JOBS_PER_USER,
-  RETRY_DELAYS_MS,
-  STALE_AFTER_MS,
-  claimNextJob,
-  enqueueQuizJob,
-  recoverStaleJobs,
-  runNextJob,
-} from "../src/core/jobs";
+import { MAX_ACTIVE_JOBS_PER_USER, enqueueQuizJob, runQuizJob } from "../src/core/jobs";
 import { type Deps, NotFoundError, TooManyJobsError } from "../src/core/types";
+import { type Worker, startWorker } from "../src/core/worker";
+import { createQuizQueue, messageIdFor } from "../src/queue";
 import { PermanentJobError } from "../src/providers/errors";
 import { ConsoleEmailSender } from "../src/providers/email/consoleEmailSender";
 import { FakeExtractor } from "../src/providers/fake/fakeExtractor";
 import { FileBlobStore } from "../src/providers/fake/fileBlobStore";
 import type { QuizGenerator } from "../src/providers/types";
-import { testDatabaseUrl } from "./testDatabase";
+import { testDatabaseUrl, testQueueSettings } from "./testDatabase";
 
 const prisma = new PrismaClient({ datasources: { db: { url: testDatabaseUrl() } } });
 const blobs = new FileBlobStore(mkdtempSync(path.join(tmpdir(), "quizqrafter-jobs-")));
@@ -33,10 +27,14 @@ const QUIZ: QuizDraft = {
   ],
 };
 
+// The real BullMQ queue, on the test schema.
+const queue = createQuizQueue(testQueueSettings());
+
 // Deps whose generator behaves as `generate` says.
 function depsWith(generate: QuizGenerator["generate"]): Deps {
   return {
     prisma,
+    queue,
     providers: {
       blobs,
       email: new ConsoleEmailSender(),
@@ -69,56 +67,64 @@ async function userWithDocument(deps: Deps = succeeding) {
 }
 
 const jobRow = (id: number) => prisma.quizJob.findUniqueOrThrow({ where: { id } });
+const message = (id: number) => queue.bull.getJob(messageIdFor(id));
 
-// Makes a queued job due now, skipping its retry delay.
-const makeDue = (id: number) =>
-  prisma.quizJob.update({ where: { id }, data: { runAfter: new Date(Date.now() - 1000) } });
+// Waits until `check` passes, for work done by a worker.
+async function eventually<T>(check: () => Promise<T>, timeoutMs = 10_000): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      return await check();
+    } catch (error) {
+      if (Date.now() > deadline) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
+}
+
+let worker: Worker | null = null;
+
+// Starts a BullMQ worker on the test queue that runs jobs with `deps`.
+async function startTestWorker(deps: Deps, concurrency = 2) {
+  worker = await startWorker(deps, {
+    queue: testQueueSettings(),
+    concurrency,
+    bull: { drainDelay: 1 },
+  });
+  return worker;
+}
 
 beforeEach(async () => {
+  await queue.bull.obliterate({ force: true });
   await prisma.quizJob.deleteMany();
+});
+
+afterEach(async () => {
+  await worker?.stop();
+  worker = null;
 });
 
 afterAll(async () => {
   // Leave no queued jobs behind for other suites (such as e2e) whose worker would pick them up.
+  await queue.bull.obliterate({ force: true });
+  await queue.close();
   await prisma.quizJob.deleteMany();
   await prisma.$disconnect();
 });
 
-describe("claiming jobs", () => {
-  it("never gives the same job to two workers", async () => {
-    const first = await userWithDocument();
-    const second = await userWithDocument();
+describe("running a job", () => {
+  const first = { claim: 1, lastAttempt: false };
 
-    const claimed = await Promise.all([claimNextJob(prisma), claimNextJob(prisma)]);
-    const byId = (a: number | null, b: number | null) => (a ?? 0) - (b ?? 0);
-    expect(claimed.sort(byId)).toEqual([first.jobId, second.jobId].sort(byId));
-    expect(await claimNextJob(prisma)).toBeNull();
-
-    const row = await jobRow(first.jobId);
-    expect(row).toMatchObject({ status: "running", attempts: 1 });
-    expect(row.heartbeatAt).not.toBeNull();
-  });
-
-  it("does not claim a job before its runAfter time", async () => {
-    const { jobId } = await userWithDocument();
-    await prisma.quizJob.update({
-      where: { id: jobId },
-      data: { runAfter: new Date(Date.now() + 60_000) },
-    });
-    expect(await claimNextJob(prisma)).toBeNull();
-  });
-});
-
-describe("running jobs", () => {
   it("reads the document, writes the quiz and records progress", async () => {
     const { jobId, documentId } = await userWithDocument();
-    expect(await runNextJob(succeeding)).toBe(true);
+    await runQuizJob(succeeding, jobId, first);
 
     expect(await jobRow(jobId)).toMatchObject({
       status: "succeeded",
       stage: null,
       questionsWritten: 2,
       error: null,
+      attempts: 1,
     });
     const document = await prisma.document.findUniqueOrThrow({
       where: { id: documentId },
@@ -126,76 +132,132 @@ describe("running jobs", () => {
     });
     expect(document.transcriptionURL).not.toBeNull();
     expect(document.quiz?.questions).toHaveLength(2);
-    expect(await runNextJob(succeeding)).toBe(false);
   });
 
-  it("retries a transient failure with backoff, then fails after 3 attempts", async () => {
+  it("puts a transient failure back in the queue and throws, so BullMQ retries it", async () => {
     const flaky = depsWith(async () => {
       throw new Error("503 overloaded");
     });
     const { jobId } = await userWithDocument(flaky);
+    await expect(runQuizJob(flaky, jobId, first)).rejects.toThrow("503 overloaded");
+    expect(await jobRow(jobId)).toMatchObject({ status: "queued", error: null });
+  });
 
-    for (const [index, delay] of RETRY_DELAYS_MS.entries()) {
-      const before = Date.now();
-      await runNextJob(flaky);
-      const row = await jobRow(jobId);
-      expect(row).toMatchObject({ status: "queued", attempts: index + 1, error: null });
-      expect(row.runAfter.getTime()).toBeGreaterThanOrEqual(before + delay);
-      await makeDue(jobId);
-    }
-
-    await runNextJob(flaky);
+  it("fails a transient failure on the last attempt with a generic message", async () => {
+    const flaky = depsWith(async () => {
+      throw new Error("503 overloaded");
+    });
+    const { jobId } = await userWithDocument(flaky);
+    await runQuizJob(flaky, jobId, { claim: 3, lastAttempt: true });
     const row = await jobRow(jobId);
     expect(row).toMatchObject({ status: "failed", attempts: 3 });
     // The user sees a generic message, not the provider's error.
     expect(row.error).toMatch(/something went wrong/i);
   });
 
-  it("fails a permanent error immediately with its message", async () => {
+  it("fails a permanent error at once with its message", async () => {
     const refused = depsWith(async () => {
       throw new PermanentJobError("The AI declined to write a quiz from this document.");
     });
     const { jobId } = await userWithDocument(refused);
-    await runNextJob(refused);
+    await runQuizJob(refused, jobId, first);
     expect(await jobRow(jobId)).toMatchObject({
       status: "failed",
-      attempts: 1,
       error: "The AI declined to write a quiz from this document.",
     });
   });
+
+  it("ignores an old run once a newer run has claimed the job", async () => {
+    let releaseOld!: () => void;
+    const slow = depsWith(async () => {
+      await new Promise<void>((resolve) => (releaseOld = resolve));
+      return QUIZ;
+    });
+    const { jobId, documentId } = await userWithDocument(slow);
+    const oldRun = runQuizJob(slow, jobId, first);
+    await eventually(async () => expect((await jobRow(jobId)).stage).toBe("writing"));
+
+    // BullMQ restarted the stalled job elsewhere, and that run failed for good.
+    const refused = depsWith(async () => {
+      throw new PermanentJobError("Refused.");
+    });
+    await runQuizJob(refused, jobId, { claim: 2, lastAttempt: false });
+
+    releaseOld();
+    await oldRun;
+    expect(await jobRow(jobId)).toMatchObject({ status: "failed", error: "Refused." });
+    expect(await prisma.quiz.count({ where: { documentId } })).toBe(0);
+  });
 });
 
-describe("stale jobs", () => {
-  async function staleRunningJob(attempts: number) {
+describe("the BullMQ worker", () => {
+  it("runs an uploaded document's job", async () => {
+    await startTestWorker(succeeding);
     const { jobId } = await userWithDocument();
-    await prisma.quizJob.update({
-      where: { id: jobId },
-      data: {
-        status: "running",
-        attempts,
-        heartbeatAt: new Date(Date.now() - STALE_AFTER_MS - 1000),
-      },
+    await eventually(async () =>
+      expect(await jobRow(jobId)).toMatchObject({ status: "succeeded" }),
+    );
+  });
+
+  it("runs jobs side by side up to its concurrency", async () => {
+    let running = 0;
+    let most = 0;
+    const counting = depsWith(async () => {
+      most = Math.max(most, ++running);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      running--;
+      return QUIZ;
     });
-    return jobId;
-  }
-
-  it("requeues a running job whose heartbeat stopped", async () => {
-    const jobId = await staleRunningJob(1);
-    expect(await recoverStaleJobs(prisma)).toBe(1);
-    expect(await jobRow(jobId)).toMatchObject({ status: "queued", heartbeatAt: null });
+    await startTestWorker(counting, 2);
+    const jobs = [await userWithDocument(), await userWithDocument(), await userWithDocument()];
+    for (const { jobId } of jobs) {
+      await eventually(async () => expect((await jobRow(jobId)).status).toBe("succeeded"));
+    }
+    expect(most).toBe(2);
   });
 
-  it("fails a stale job that has used all its attempts", async () => {
-    const jobId = await staleRunningJob(3);
-    await recoverStaleJobs(prisma);
-    expect(await jobRow(jobId)).toMatchObject({ status: "failed" });
+  it("retries a transient failure after a 30 s backoff", async () => {
+    let calls = 0;
+    const flakyOnce = depsWith(async () => {
+      if (++calls === 1) throw new Error("503 overloaded");
+      return QUIZ;
+    });
+    await startTestWorker(flakyOnce);
+    const { jobId } = await userWithDocument(flakyOnce);
+
+    const job = await eventually(async () => {
+      const job = await message(jobId);
+      expect(await job?.getState()).toBe("delayed");
+      return job!;
+    });
+    expect(job.attemptsMade).toBe(1);
+    expect(job.delay).toBe(30_000);
+    expect((await jobRow(jobId)).status).toBe("queued");
+
+    await job.promote(); // Skip the wait.
+    await eventually(async () =>
+      expect(await jobRow(jobId)).toMatchObject({ status: "succeeded", attempts: 2 }),
+    );
   });
 
-  it("leaves running jobs with a recent heartbeat alone", async () => {
-    await userWithDocument();
-    const jobId = await claimNextJob(prisma);
-    expect(await recoverStaleJobs(prisma)).toBe(0);
-    expect(await jobRow(jobId!)).toMatchObject({ status: "running" });
+  it("does not retry a permanent failure", async () => {
+    let calls = 0;
+    const refused = depsWith(async () => {
+      calls++;
+      throw new PermanentJobError("Refused.");
+    });
+    await startTestWorker(refused);
+    const { jobId } = await userWithDocument(refused);
+    await eventually(async () => expect((await jobRow(jobId)).status).toBe("failed"));
+    expect(calls).toBe(1);
+  });
+
+  it("sends queued jobs that have no message when it starts", async () => {
+    const { jobId } = await userWithDocument();
+    // As if the API stopped between saving the row and sending the message.
+    await queue.bull.obliterate({ force: true });
+    await startTestWorker(succeeding);
+    await eventually(async () => expect((await jobRow(jobId)).status).toBe("succeeded"));
   });
 });
 
@@ -225,6 +287,25 @@ describe("queueing jobs", () => {
         mimeType: "text/plain",
       }),
     ).rejects.toBeInstanceOf(TooManyJobsError);
+  });
+
+  it("sends the job to the queue", async () => {
+    const { jobId } = await userWithDocument();
+    expect((await message(jobId))?.data).toEqual({ quizJobId: jobId });
+  });
+
+  it("fails the job if the queue can't take it, so it isn't stuck waiting", async () => {
+    const broken: Deps = {
+      ...succeeding,
+      queue: {
+        add: async () => {
+          throw new Error("queue down");
+        },
+      },
+    };
+    const { jobId } = await userWithDocument(broken);
+    expect(await jobRow(jobId)).toMatchObject({ status: "failed" });
+    expect((await jobRow(jobId)).error).toMatch(/couldn't be started/);
   });
 
   it("refuses to queue a job for another user's document", async () => {

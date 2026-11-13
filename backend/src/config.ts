@@ -1,12 +1,14 @@
 import { z } from "zod";
 
-// Treat empty strings (e.g. `REDIS_URL=` in .env) as unset.
+// Treat empty strings (e.g. `LLM_MODEL=` in .env) as unset.
 function blankAsUnset<T extends z.ZodType>(schema: T) {
   return z.preprocess((value) => (value === "" ? undefined : value), schema);
 }
 
 const EnvSchema = z.object({
   NODE_ENV: z.string().default("development"),
+  // Prisma and the BullMQ quiz queue both use this database.
+  DATABASE_URL: blankAsUnset(z.string().optional()),
   PORT: z.coerce.number().int().default(8080),
   // Comma-separated list of origins allowed to call the API.
   FRONTEND_URL: z.string().default("http://localhost:3000"),
@@ -19,7 +21,6 @@ const EnvSchema = z.object({
   RESEND_API_KEY: blankAsUnset(z.string().optional()),
   // Resend's test sender only delivers to your own Resend account's email; use a verified domain in production.
   EMAIL_FROM: blankAsUnset(z.string().default("Quiz Qrafter <onboarding@resend.dev>")),
-  REDIS_URL: blankAsUnset(z.string().optional()),
   // Where uploaded files and transcripts are kept: Google Cloud Storage, or a local directory.
   STORAGE: blankAsUnset(z.enum(["gcs", "local"]).default("gcs")),
   LOCAL_DATA_DIR: blankAsUnset(z.string().default(".data")),
@@ -32,9 +33,17 @@ const EnvSchema = z.object({
   LLM_MODEL: blankAsUnset(z.string().default("gemini-4-hydrogen")),
   // Slows the fake AI down so tests can watch a job's progress.
   FAKE_AI_DELAY_MS: blankAsUnset(z.coerce.number().int().min(0).default(0)),
-  // "inline" runs the job worker inside the API process; "off" leaves it to `npm run worker`.
-  WORKER: blankAsUnset(z.enum(["inline", "off"]).default("inline")),
+  // The Postgres schema holding BullMQ's tables, kept apart from the app's.
+  QUEUE_SCHEMA: blankAsUnset(
+    z
+      .string()
+      .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
+      .default("bullmq"),
+  ),
+  // Each worker process runs this many quiz jobs at once.
   WORKER_CONCURRENCY: blankAsUnset(z.coerce.number().int().min(1).default(2)),
+  // The worker process's health check port.
+  WORKER_PORT: blankAsUnset(z.coerce.number().int().default(8081)),
 });
 
 // Variables from before step 2, with what replaced them.
@@ -68,6 +77,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   if (env.AI === "claude") {
     throw new Error(
       "AI=claude is no longer supported. Set AI=gemini (with GEMINI_API_KEY) or AI=fake.",
+    );
+  }
+
+  if (env.WORKER) {
+    console.warn(
+      "WORKER is no longer used: the API never runs quiz jobs. Start workers with `npm run worker`.",
     );
   }
 
@@ -115,7 +130,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       resendApiKey: parsed.RESEND_API_KEY,
       from: parsed.EMAIL_FROM,
     },
-    redisUrl: parsed.REDIS_URL,
+    queue: {
+      databaseUrl: parsed.DATABASE_URL,
+      schema: parsed.QUEUE_SCHEMA,
+    },
     storage: parsed.STORAGE,
     localDataDir: parsed.LOCAL_DATA_DIR,
     gcs: {
@@ -129,8 +147,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     },
     fakeAiDelayMs: parsed.FAKE_AI_DELAY_MS,
     worker: {
-      mode: parsed.WORKER,
       concurrency: parsed.WORKER_CONCURRENCY,
+      port: parsed.WORKER_PORT,
     },
   };
 }

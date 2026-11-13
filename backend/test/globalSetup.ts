@@ -1,8 +1,9 @@
 import { execSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
-import { BACKEND_DIR, testDatabaseUrl } from "./testDatabase";
+import { createQuizQueue } from "../src/queue";
+import { BACKEND_DIR, testDatabaseUrl, testQueueSettings } from "./testDatabase";
 
-// Migrates the test schema and empties it before the test run.
+// Migrates the test schemas and empties them, and the test queue, before the test run.
 export default async function setup() {
   const url = testDatabaseUrl();
   execSync("npx prisma migrate deploy", {
@@ -16,4 +17,8 @@ export default async function setup() {
     'TRUNCATE "quiz_jobs", "questions", "quizzes", "documents", "verifications", "users" RESTART IDENTITY CASCADE',
   );
   await prisma.$disconnect();
+
+  const queue = createQuizQueue(testQueueSettings());
+  await queue.bull.obliterate({ force: true });
+  await queue.close();
 }

@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { loadConfig } from "../src/config";
 import { PermanentJobError } from "../src/providers/errors";
 import { filePartFor } from "../src/providers/gemini/textExtractor";
@@ -118,6 +118,20 @@ describe("loadConfig", () => {
     expect(loadConfig({ ...local, AI: "fake", EMAIL_FROM: "QQ <hi@example.com>" }).email.from).toBe(
       "QQ <hi@example.com>",
     );
+  });
+
+  it("keeps the quiz queue in the bullmq schema of DATABASE_URL's database", () => {
+    const config = loadConfig({ ...local, AI: "fake", DATABASE_URL: "postgres://db/app" });
+    expect(config.queue).toEqual({ databaseUrl: "postgres://db/app", schema: "bullmq" });
+    expect(config.worker).toEqual({ concurrency: 2, port: 8081 });
+    expect(() => loadConfig({ ...local, AI: "fake", QUEUE_SCHEMA: "bad-name" })).toThrow();
+  });
+
+  it("starts with a warning, not an error, when the old WORKER setting is set", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(() => loadConfig({ ...local, AI: "fake", WORKER: "inline" })).not.toThrow();
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/npm run worker/));
+    warn.mockRestore();
   });
 
   it("defaults to gemini-4-hydrogen", () => {

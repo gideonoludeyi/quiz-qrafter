@@ -1,9 +1,11 @@
 import type { PrismaClient } from "@prisma/client";
 import type { Providers } from "../providers/types";
+import type { QuizQueue } from "../queue";
 
-// What core functions need: the database and the external providers.
+// What core functions need: the database, the queue to the workers, and the external providers.
 export type Deps = {
   prisma: PrismaClient;
+  queue: Pick<QuizQueue, "add">;
   providers: Providers;
 };
 

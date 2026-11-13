@@ -4,24 +4,12 @@ import { PermanentJobError } from "../providers/errors";
 import { saveGeneratedQuiz } from "./quizzes";
 import { type Deps, NotFoundError, TooManyJobsError } from "./types";
 
-export const MAX_ATTEMPTS = 3;
 export const MAX_ACTIVE_JOBS_PER_USER = 3;
-// Wait before retry n (after attempt n failed with a transient error).
-export const RETRY_DELAYS_MS = [30_000, 60_000];
-export const HEARTBEAT_INTERVAL_MS = 10_000;
-// A running job whose heartbeat is older than this has lost its worker.
-export const STALE_AFTER_MS = 2 * 60_000;
 const PROGRESS_INTERVAL_MS = 1_000;
 
-const GENERIC_FAILURE = "Something went wrong while making your quiz. Please try again.";
-const ACTIVE: JobRow["status"][] = ["queued", "running"];
-
-// A time for raw SQL, from the app's clock like every other job timestamp. Mixing in the
-// database clock (NOW()) breaks "is it due?" checks when the two clocks differ slightly.
-// Casting the ISO string drops its "Z", giving the UTC wall time Prisma stores.
-function sqlTime(date: Date) {
-  return Prisma.sql`${date.toISOString()}::timestamp(3)`;
-}
+export const GENERIC_FAILURE = "Something went wrong while making your quiz. Please try again.";
+const NOT_QUEUED = "Your quiz couldn't be started. Please try again.";
+export const ACTIVE: JobRow["status"][] = ["queued", "running"];
 
 // Converts a job row to the shared shape. `quizId` is the document's quiz, shown once the job succeeded.
 export function toQuizJob(row: JobRow, documentQuizId: number | null): QuizJob {
@@ -52,10 +40,10 @@ async function findActiveJob(prisma: PrismaClient, documentId: number) {
   });
 }
 
-// Queues a quiz job for one of the user's documents. Returns the document's job
-// already in progress instead of starting a second one.
+// Queues a quiz job for one of the user's documents and sends it to the workers.
+// Returns the document's job already in progress instead of starting a second one.
 export async function enqueueQuizJob(
-  { prisma }: Deps,
+  { prisma, queue }: Deps,
   userId: number,
   documentId: number,
 ): Promise<QuizJob> {
@@ -70,12 +58,9 @@ export async function enqueueQuizJob(
   });
   if (active >= MAX_ACTIVE_JOBS_PER_USER) throw new TooManyJobsError(MAX_ACTIVE_JOBS_PER_USER);
 
+  let row: JobWithDocumentQuiz;
   try {
-    const row = await prisma.quizJob.create({
-      data: { documentId, runAfter: new Date() },
-      include: withDocumentQuiz,
-    });
-    return toQuizJobWithQuiz(row);
+    row = await prisma.quizJob.create({ data: { documentId }, include: withDocumentQuiz });
   } catch (error) {
     // A concurrent request queued one first; the partial unique index rejected ours.
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -84,6 +69,19 @@ export async function enqueueQuizJob(
     }
     throw error;
   }
+
+  try {
+    await queue.add(row.id);
+  } catch (error) {
+    // Fail the row rather than leave it queued with no message; the user can try again.
+    console.error(`Sending quiz job ${row.id} to the queue failed:`, error);
+    row = await prisma.quizJob.update({
+      where: { id: row.id },
+      data: { status: "failed", error: NOT_QUEUED, finishedAt: new Date() },
+      include: withDocumentQuiz,
+    });
+  }
+  return toQuizJobWithQuiz(row);
 }
 
 export async function getQuizJob(
@@ -99,27 +97,8 @@ export async function getQuizJob(
   return toQuizJobWithQuiz(row);
 }
 
-// Marks the oldest due job as running and returns its id, or null if none is due.
-// SKIP LOCKED lets several workers claim jobs at once without taking the same one.
-export async function claimNextJob(prisma: PrismaClient): Promise<number | null> {
-  const now = sqlTime(new Date());
-  const rows = await prisma.$queryRaw<{ id: number }[]>`
-    UPDATE "quiz_jobs"
-    SET "status" = 'running', "attempts" = "attempts" + 1, "stage" = NULL,
-        "questionsWritten" = 0, "heartbeatAt" = ${now}, "updatedAt" = ${now}
-    WHERE "id" = (
-      SELECT "id" FROM "quiz_jobs"
-      WHERE "status" = 'queued' AND "runAfter" <= ${now}
-      ORDER BY "runAfter", "id"
-      FOR UPDATE SKIP LOCKED
-      LIMIT 1
-    )
-    RETURNING "id"`;
-  return rows[0]?.id ?? null;
-}
-
-// Writes to a claimed job, but only while this claim still owns it. If the job was
-// requeued as stale and claimed again, the old runner's writes are ignored.
+// Writes to a claimed job, but only while this claim still owns it. If BullMQ restarted a
+// stalled job on another worker, the old run's writes are ignored.
 function claimWriter(prisma: PrismaClient, jobId: number, attempt: number) {
   return async (data: Prisma.QuizJobUpdateManyMutationInput): Promise<boolean> => {
     const { count } = await prisma.quizJob.updateMany({
@@ -130,21 +109,26 @@ function claimWriter(prisma: PrismaClient, jobId: number, attempt: number) {
   };
 }
 
+// Which run of a BullMQ job this is. `claim` (BullMQ's attemptsStarted) is unique per run,
+// including restarts after a stall; `lastAttempt` says whether a failure may be retried.
+export type JobRun = { claim: number; lastAttempt: boolean };
+
 // Reads the document if needed, writes the quiz, and saves it, recording progress on the job.
-export async function runQuizJob(deps: Deps, jobId: number): Promise<void> {
+// Throws only when the job should be retried; other failures are recorded on the row.
+export async function runQuizJob(deps: Deps, jobId: number, run: JobRun): Promise<void> {
   const { prisma, providers } = deps;
+  const { count } = await prisma.quizJob.updateMany({
+    where: { id: jobId, status: { in: ACTIVE } },
+    data: { status: "running", attempts: run.claim, stage: null, questionsWritten: 0 },
+  });
+  if (count === 0) return; // Deleted, or already finished.
+
   const job = await prisma.quizJob.findUniqueOrThrow({
     where: { id: jobId },
     include: { document: true },
   });
-  const write = claimWriter(prisma, job.id, job.attempts);
-  const setStage = (stage: JobStage) => write({ stage, heartbeatAt: new Date() });
-
-  const heartbeat = setInterval(() => {
-    void write({ heartbeatAt: new Date() }).catch((error) =>
-      console.error("Heartbeat failed:", error),
-    );
-  }, HEARTBEAT_INTERVAL_MS);
+  const write = claimWriter(prisma, job.id, run.claim);
+  const setStage = (stage: JobStage) => write({ stage });
 
   try {
     const { document } = job;
@@ -168,7 +152,7 @@ export async function runQuizJob(deps: Deps, jobId: number): Promise<void> {
     );
     await reportProgress.flush();
 
-    if (!(await setStage("saving"))) return; // This claim was taken over; the new runner saves.
+    if (!(await setStage("saving"))) return; // This claim was taken over; the new run saves.
     await saveGeneratedQuiz(prisma, document.id, draft);
     await write({
       status: "succeeded",
@@ -178,10 +162,30 @@ export async function runQuizJob(deps: Deps, jobId: number): Promise<void> {
       finishedAt: new Date(),
     });
   } catch (error) {
-    await recordFailure(prisma, job, error);
-  } finally {
-    clearInterval(heartbeat);
+    console.error(`Quiz job ${job.id} (run ${run.claim}) failed:`, error);
+    if (error instanceof PermanentJobError) {
+      await write({ status: "failed", stage: null, error: error.message, finishedAt: new Date() });
+    } else if (run.lastAttempt) {
+      await write({
+        status: "failed",
+        stage: null,
+        error: GENERIC_FAILURE,
+        finishedAt: new Date(),
+      });
+    } else {
+      // Shown as waiting while BullMQ holds the retry back.
+      await write({ status: "queued", stage: null });
+      throw error;
+    }
   }
+}
+
+// Fails a job BullMQ gave up on outside runQuizJob, e.g. after it stalled too often.
+export async function failQuizJob(prisma: PrismaClient, jobId: number): Promise<void> {
+  await prisma.quizJob.updateMany({
+    where: { id: jobId, status: { in: ACTIVE } },
+    data: { status: "failed", stage: null, error: GENERIC_FAILURE, finishedAt: new Date() },
+  });
 }
 
 // Saves the latest progress count at most once a second, in order.
@@ -208,49 +212,4 @@ function throttledProgress(save: (questionsWritten: number) => Promise<unknown>)
     },
     flush: () => saveLatest(),
   };
-}
-
-// Fails the job, or queues a retry if the error may be temporary and attempts remain.
-async function recordFailure(prisma: PrismaClient, job: JobRow, error: unknown) {
-  console.error(`Quiz job ${job.id} attempt ${job.attempts} failed:`, error);
-  const write = claimWriter(prisma, job.id, job.attempts);
-
-  if (error instanceof PermanentJobError) {
-    await write({ status: "failed", stage: null, error: error.message, finishedAt: new Date() });
-  } else if (job.attempts < MAX_ATTEMPTS) {
-    const delay = RETRY_DELAYS_MS[job.attempts - 1] ?? RETRY_DELAYS_MS.at(-1)!;
-    await write({
-      status: "queued",
-      stage: null,
-      heartbeatAt: null,
-      runAfter: new Date(Date.now() + delay),
-    });
-  } else {
-    await write({ status: "failed", stage: null, error: GENERIC_FAILURE, finishedAt: new Date() });
-  }
-}
-
-// Requeues running jobs whose worker stopped sending heartbeats, or fails them if out of attempts.
-export async function recoverStaleJobs(prisma: PrismaClient, now = new Date()): Promise<number> {
-  const stale = {
-    status: "running" as const,
-    heartbeatAt: { lt: new Date(now.getTime() - STALE_AFTER_MS) },
-  };
-  const failed = await prisma.quizJob.updateMany({
-    where: { ...stale, attempts: { gte: MAX_ATTEMPTS } },
-    data: { status: "failed", stage: null, error: GENERIC_FAILURE, finishedAt: now },
-  });
-  const requeued = await prisma.quizJob.updateMany({
-    where: stale,
-    data: { status: "queued", stage: null, heartbeatAt: null, runAfter: now },
-  });
-  return failed.count + requeued.count;
-}
-
-// Claims and runs one due job. Returns false if there was nothing to run.
-export async function runNextJob(deps: Deps): Promise<boolean> {
-  const jobId = await claimNextJob(deps.prisma);
-  if (jobId === null) return false;
-  await runQuizJob(deps, jobId);
-  return true;
 }
