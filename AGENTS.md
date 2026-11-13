@@ -55,6 +55,20 @@ The backend can run without Google Cloud or the Gemini API. In `backend/.env`, s
 
 `AI=gemini` (the default) needs `GEMINI_API_KEY`; `LLM_MODEL` picks the Gemini model (default `gemini-4-hydrogen`). It works with either storage setting. `STORAGE=gcs` (the default) needs `GOOGLE_APPLICATION_CREDENTIALS`.
 
+## Business Rules
+
+Constraints the product depends on. Enforce them in the backend, not only in the UI, and update this list and the tests when one changes.
+
+### Quiz job limits
+
+- **At most `MAX_ACTIVE_JOBS_PER_USER` (3) quizzes in progress per user**, counted across all of their documents. Only waiting or running jobs count; finished or failed ones don't.
+    - It limits how much AI work one user can start at once.
+    - It applies to uploads and to generating, regenerating or retrying a quiz.
+    - An upload over the limit is refused before anything is stored, so it leaves no document behind.
+    - Going over the limit returns `429` with a message the frontend shows the user.
+- **At most one quiz in progress per document.** Asking again for a document whose quiz is already in progress returns that job instead of starting another, and doesn't count against the per-user limit.
+    - A partial unique index enforces this even under concurrent requests.
+
 ## Quiz Jobs
 
 Uploading a file records a quiz job and sends it to a [BullMQ](https://docs.bullmq.io/) queue. BullMQ uses its [Postgres backend](https://docs.bullmq.io/guide/postgresql), with its tables in their own schema (`QUEUE_SCHEMA`, default `bullmq`) of the app's database; there is no Redis. A worker takes the job, has Gemini read the file (PDFs and images; text and Word files are read locally), writes the quiz, and saves it. The browser polls `GET /api/v1/jobs/:id` for progress.

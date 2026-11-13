@@ -287,6 +287,8 @@ describe("queueing jobs", () => {
         mimeType: "text/plain",
       }),
     ).rejects.toBeInstanceOf(TooManyJobsError);
+    // The refused upload isn't kept as a document without a quiz.
+    expect(await prisma.document.count({ where: { userId } })).toBe(MAX_ACTIVE_JOBS_PER_USER);
   });
 
   it("sends the job to the queue", async () => {

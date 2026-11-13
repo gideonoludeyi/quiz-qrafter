@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { type Document, type QuizJob, uploadTypeFor } from "@quizqrafter/shared";
-import { enqueueQuizJob, toQuizJob } from "./jobs";
-import { type Deps, UnsupportedFileError } from "./types";
+import { assertCanStartJob, enqueueQuizJob, toQuizJob } from "./jobs";
+import { type Deps, TooManyJobsError, UnsupportedFileError } from "./types";
 
 const withQuizAndLatestJob = {
   quiz: { select: { id: true } },
@@ -41,6 +41,8 @@ export async function uploadDocument(
   const { prisma, providers } = deps;
   const mimeType = uploadTypeFor(file.mimeType, file.filename);
   if (mimeType === null) throw new UnsupportedFileError();
+  // Refuse before storing anything, so a rejected upload leaves no document behind.
+  await assertCanStartJob(prisma, userId);
 
   // The random part keeps two uploads with the same filename from overwriting each other.
   const rawURL = await providers.blobs.put(
@@ -51,7 +53,14 @@ export async function uploadDocument(
     data: { filename: file.filename, mimeType, size: file.size, rawURL, userId },
   });
 
-  const job = await enqueueQuizJob(deps, userId, id);
+  let job: QuizJob;
+  try {
+    job = await enqueueQuizJob(deps, userId, id);
+  } catch (error) {
+    // A concurrent upload took the last slot after the check above.
+    if (error instanceof TooManyJobsError) await prisma.document.delete({ where: { id } });
+    throw error;
+  }
   const row = await prisma.document.findUniqueOrThrow({
     where: { id },
     include: withQuizAndLatestJob,
@@ -68,3 +77,4 @@ export async function listDocuments({ prisma }: Deps, userId: number): Promise<D
   });
   return rows.map(toDocument);
 }
+

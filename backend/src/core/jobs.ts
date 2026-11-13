@@ -4,6 +4,7 @@ import { PermanentJobError } from "../providers/errors";
 import { saveGeneratedQuiz } from "./quizzes";
 import { type Deps, NotFoundError, TooManyJobsError } from "./types";
 
+// Business rule: how many quizzes one user may have queued or running at once.
 export const MAX_ACTIVE_JOBS_PER_USER = 3;
 const PROGRESS_INTERVAL_MS = 1_000;
 
@@ -40,6 +41,14 @@ async function findActiveJob(prisma: PrismaClient, documentId: number) {
   });
 }
 
+// Throws TooManyJobsError if the user already has the most quiz jobs in progress allowed.
+export async function assertCanStartJob(prisma: PrismaClient, userId: number): Promise<void> {
+  const active = await prisma.quizJob.count({
+    where: { status: { in: ACTIVE }, document: { userId } },
+  });
+  if (active >= MAX_ACTIVE_JOBS_PER_USER) throw new TooManyJobsError(MAX_ACTIVE_JOBS_PER_USER);
+}
+
 // Queues a quiz job for one of the user's documents and sends it to the workers.
 // Returns the document's job already in progress instead of starting a second one.
 export async function enqueueQuizJob(
@@ -53,10 +62,7 @@ export async function enqueueQuizJob(
   const existing = await findActiveJob(prisma, documentId);
   if (existing !== null) return toQuizJobWithQuiz(existing);
 
-  const active = await prisma.quizJob.count({
-    where: { status: { in: ACTIVE }, document: { userId } },
-  });
-  if (active >= MAX_ACTIVE_JOBS_PER_USER) throw new TooManyJobsError(MAX_ACTIVE_JOBS_PER_USER);
+  await assertCanStartJob(prisma, userId);
 
   let row: JobWithDocumentQuiz;
   try {
