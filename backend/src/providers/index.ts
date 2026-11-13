@@ -1,6 +1,6 @@
 import type { Config } from "../config";
-import { BetterAuthEmailSender } from "./email/betterAuthEmailSender";
 import { ConsoleEmailSender } from "./email/consoleEmailSender";
+import { ResendEmailSender } from "./email/resendEmailSender";
 import { FakeExtractor } from "./fake/fakeExtractor";
 import { FakeQuizGenerator } from "./fake/fakeQuizGenerator";
 import { FileBlobStore } from "./fake/fileBlobStore";
@@ -18,8 +18,8 @@ export function createProviders(config: Config): Providers {
       : new GcsBlobStore(config.gcs.documentsBucket, config.gcs.credentialsFile!);
 
   const email =
-    config.email.sender === "betterauth"
-      ? new BetterAuthEmailSender(config.email.apiKey!)
+    config.email.sender === "resend"
+      ? new ResendEmailSender(config.email.resendApiKey!, config.email.from)
       : new ConsoleEmailSender();
 
   if (config.ai === "fake") {

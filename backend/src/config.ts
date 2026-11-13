@@ -14,9 +14,11 @@ const EnvSchema = z.object({
   BETTER_AUTH_SECRET: blankAsUnset(z.string().min(32).optional()),
   // The public URL of this backend; reset links in emails point here.
   BETTER_AUTH_URL: blankAsUnset(z.string().url().optional()),
-  // How password reset emails go out: better-auth's email service, or printed to the log.
-  EMAIL: blankAsUnset(z.enum(["betterauth", "console"]).default("console")),
-  BETTER_AUTH_API_KEY: blankAsUnset(z.string().optional()),
+  // How password reset emails go out: sent with Resend, or printed to the log.
+  EMAIL: blankAsUnset(z.enum(["resend", "console"]).default("console")),
+  RESEND_API_KEY: blankAsUnset(z.string().optional()),
+  // Resend's test sender only delivers to your own Resend account's email; use a verified domain in production.
+  EMAIL_FROM: blankAsUnset(z.string().default("Quiz Qrafter <onboarding@resend.dev>")),
   REDIS_URL: blankAsUnset(z.string().optional()),
   // Where uploaded files and transcripts are kept: Google Cloud Storage, or a local directory.
   STORAGE: blankAsUnset(z.enum(["gcs", "local"]).default("gcs")),
@@ -57,6 +59,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     );
   }
 
+  if (env.EMAIL === "betterauth") {
+    throw new Error(
+      "EMAIL=betterauth is no longer supported. Set EMAIL=resend (with RESEND_API_KEY) or EMAIL=console.",
+    );
+  }
+
   if (env.AI === "claude") {
     throw new Error(
       "AI=claude is no longer supported. Set AI=gemini (with GEMINI_API_KEY) or AI=fake.",
@@ -80,9 +88,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   if (isProduction && parsed.BETTER_AUTH_SECRET === undefined) {
     throw new Error("BETTER_AUTH_SECRET is required in production (at least 32 characters).");
   }
-  if (parsed.EMAIL === "betterauth" && parsed.BETTER_AUTH_API_KEY === undefined) {
+  if (parsed.EMAIL === "resend" && parsed.RESEND_API_KEY === undefined) {
     throw new Error(
-      "EMAIL=betterauth needs BETTER_AUTH_API_KEY. Set it, or set EMAIL=console to print reset links to the log.",
+      "EMAIL=resend needs RESEND_API_KEY. Set it, or set EMAIL=console to print reset links to the log.",
     );
   }
 
@@ -104,7 +112,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     },
     email: {
       sender: parsed.EMAIL,
-      apiKey: parsed.BETTER_AUTH_API_KEY,
+      resendApiKey: parsed.RESEND_API_KEY,
+      from: parsed.EMAIL_FROM,
     },
     redisUrl: parsed.REDIS_URL,
     storage: parsed.STORAGE,

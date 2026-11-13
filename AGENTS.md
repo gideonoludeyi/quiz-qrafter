@@ -70,7 +70,7 @@ The backend (Hono) uses better-auth, mounted at `/api/auth/*`; the frontend talk
 
 - Passwords are hashed with bcrypt, which users created before better-auth were hashed with.
 - IDs are serial integers (`generateId: "serial"`), so `users.id` and everything that references it are numbers.
-- Password reset emails go through the email provider: `EMAIL=console` (the default) prints the link to the backend log, `EMAIL=betterauth` sends it with better-auth's email service and needs `BETTER_AUTH_API_KEY`.
+- Password reset emails go through the email provider: `EMAIL=console` (the default) prints the link to the backend log, `EMAIL=resend` sends it with Resend and needs `RESEND_API_KEY`. `EMAIL_FROM` sets the sender; the default, Resend's test address `onboarding@resend.dev`, only delivers to the Resend account owner's email.
 - better-auth only accepts sign-in requests from `FRONTEND_URL` origins. Requests without a trusted `Origin` header (e.g. curl, tests) need one set.
 
 ## Shared Schemas

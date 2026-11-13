@@ -103,6 +103,23 @@ describe("loadConfig", () => {
     expect(() => loadConfig({ ...local, ANTHROPIC_MODEL: "x" })).toThrow(/LLM_MODEL/);
   });
 
+  it("requires a Resend key when EMAIL=resend", () => {
+    expect(() => loadConfig({ ...local, AI: "fake", EMAIL: "resend" })).toThrow(/RESEND_API_KEY/);
+  });
+
+  it("names the replacement for the removed better-auth email setting", () => {
+    expect(() => loadConfig({ ...local, AI: "fake", EMAIL: "betterauth" })).toThrow(/EMAIL=resend/);
+  });
+
+  it("sends from Resend's test address unless EMAIL_FROM is set", () => {
+    expect(loadConfig({ ...local, AI: "fake" }).email.from).toBe(
+      "Quiz Qrafter <onboarding@resend.dev>",
+    );
+    expect(loadConfig({ ...local, AI: "fake", EMAIL_FROM: "QQ <hi@example.com>" }).email.from).toBe(
+      "QQ <hi@example.com>",
+    );
+  });
+
   it("defaults to gemini-4-hydrogen", () => {
     expect(loadConfig({ ...local, AI: "gemini", GEMINI_API_KEY: "k" }).gemini.model).toBe(
       "gemini-4-hydrogen",
