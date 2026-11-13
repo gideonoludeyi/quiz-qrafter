@@ -1,0 +1,13 @@
+{
+    // Only for the root-level test runner files; each package has its own tsconfig.
+    "compilerOptions": {
+        "target": "es2022",
+        "module": "preserve",
+        "moduleResolution": "bundler",
+        "types": ["node"],
+        "strict": true,
+        "skipLibCheck": true,
+        "noEmit": true
+    },
+    "include": ["e2e", "playwright.config.ts"]
+}

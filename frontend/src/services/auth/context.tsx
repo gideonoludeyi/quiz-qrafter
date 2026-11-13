@@ -9,9 +9,9 @@ type AuthContextValue = {
   error: Error | null;
   authenticated: boolean;
   // Both reject with the reason when the request fails.
-  signUp(email: string, password: string, fullname: string): Promise<void>;
-  login(email: string, password: string): Promise<void>;
-  signOut(): void;
+  signUp: (email: string, password: string, fullname: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  signOut: () => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
