@@ -1,9 +1,4 @@
 import { defineConfig } from "vite-plus";
 
-export default defineConfig({
-  pack: {
-    entry: ["src/index.ts"],
-    format: ["esm", "cjs"],
-    dts: true,
-  },
-});
+// No build: the backend and frontend compile this package from its TypeScript source.
+export default defineConfig({});

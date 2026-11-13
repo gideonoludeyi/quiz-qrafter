@@ -10,9 +10,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "./src"),
-      // Compile the shared package from source, so the frontend never depends on its
-      // dist/ folder, which each shared build deletes and rewrites.
-      "@quizqrafter/shared": path.resolve(import.meta.dirname, "../packages/shared/src/index.ts"),
     },
   },
   server: {

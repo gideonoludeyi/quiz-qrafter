@@ -47,7 +47,7 @@ Remove this workaround after upgrading to a Vite+ release that includes [PR #331
 The backend can run without Google Cloud or the Gemini API. In `backend/.env`, set `STORAGE=local` (files go under `backend/.data/`) and `AI=fake` (text and Word files are read as-is, PDFs and images become sample text, and every quiz is the same three questions). Postgres still runs locally.
 
 - `docker compose up -d` starts Postgres, the only service the app needs.
-- `vp run dev` builds `packages/shared` first, then starts the backend API (port 8080), one quiz worker (health check on 8081) and the frontend (port 3000). The API and worker restart on their own when backend code changes.
+- `vp run dev` starts the backend API (port 8080), one quiz worker (health check on 8081) and the frontend (port 3000). The API and worker restart on their own when backend or shared code changes.
 - `vpx scripts/seed.ts` (from `backend/`) creates `demo@example.com` / `Password1` with a document and a quiz.
 - Password reset links appear in the backend log (`EMAIL=console`).
 - `vp test` runs the shared unit tests and the backend tests. The backend tests use a separate `test` schema in the local Postgres.
@@ -91,4 +91,6 @@ The backend uses better-auth, mounted at `/api/auth/*`, and the frontend uses be
 
 ## Shared Schemas
 
-`packages/shared` holds the schemas for quizzes, documents and jobs, used by both the backend and the frontend. Change a schema there, never in one app only. Run `vp run --filter @quizqrafter/shared build` after editing it; `vp run dev` does this once at startup and does not watch for changes.
+`packages/shared` holds the schemas for quizzes, documents and jobs, used by both the backend and the frontend. Change a schema there, never in one app only.
+
+The package has no build step: the backend and frontend compile it from its TypeScript source, and the backend's production build bundles it in. Edits take effect right away, in development and in tests.

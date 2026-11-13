@@ -14,11 +14,11 @@
     "type": "module",
     "scripts": {
         "start": "vp run --filter backend start",
-        "build": "vp run --filter @quizqrafter/shared build && vp run --filter backend --filter frontend build",
-        "dev": "vp run --filter @quizqrafter/shared build && vp run -r --parallel dev",
-        "check-types": "vp run --filter @quizqrafter/shared build && vp run -r check-types",
+        "build": "vp run --filter backend --filter frontend build",
+        "dev": "vp run -r --parallel dev",
+        "check-types": "vp run -r check-types",
         "prepare": "vp config",
-        "e2e": "vp run --filter @quizqrafter/shared build && playwright test"
+        "e2e": "playwright test"
     },
     "devDependencies": {
         "@playwright/test": "^1.65.0",
