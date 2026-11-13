@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { createAdaptorServer } from "@hono/node-server";
 import { PrismaClient } from "@prisma/client";
 import {
   DocumentSchema,
@@ -28,7 +29,8 @@ const config = loadConfig({
 const prisma = new PrismaClient({ datasources: { db: { url: testDatabaseUrl() } } });
 const deps = { prisma, providers: createProviders(config) };
 const extract = vi.spyOn(deps.providers.extractor, "extract");
-const app = createApp(config, deps);
+// A Node server around the Hono app, for supertest.
+const app = createAdaptorServer({ fetch: createApp(config, deps).fetch });
 
 // Runs every due job, as the worker would.
 async function runJobs() {
@@ -199,6 +201,11 @@ describe("quiz API", () => {
 
   it("rejects invalid bodies with 400", async () => {
     await alice.post("/api/v1/jobs").send({ documentId: "one" }).expect(400);
+    await alice
+      .post("/api/v1/jobs")
+      .set("Content-Type", "application/json")
+      .send("{not json")
+      .expect(400);
     await alice.put(`/api/v1/quiz/${quiz.id}`).send({ title: "", questions: [] }).expect(400);
     await alice
       .put(`/api/v1/quiz/${quiz.id}`)

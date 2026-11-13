@@ -10,7 +10,8 @@ const EnvSchema = z.object({
   PORT: z.coerce.number().int().default(8080),
   // Comma-separated list of origins allowed to call the API.
   FRONTEND_URL: z.string().default("http://localhost:3000"),
-  SESSION_SECRET: z.string().default("secret"),
+  // Encrypts the session cookie; hono-sessions needs at least 32 characters.
+  SESSION_SECRET: z.string().min(32).default("development-only-session-secret-0123456789"),
   REDIS_URL: blankAsUnset(z.string().optional()),
   // Where uploaded files and transcripts are kept: Google Cloud Storage, or a local directory.
   STORAGE: blankAsUnset(z.enum(["gcs", "local"]).default("gcs")),

@@ -1,3 +1,4 @@
+import { serve } from "@hono/node-server";
 import { createApp } from "./app";
 import { loadConfig } from "./config";
 import { startWorker } from "./core/worker";
@@ -13,14 +14,10 @@ const worker =
     ? startWorker(deps, { concurrency: config.worker.concurrency })
     : null;
 
-const server = app.listen(config.port, () => {
+const server = serve({ fetch: app.fetch, port: config.port }, () => {
   console.log(
     `Live on PORT ${config.port} (storage: ${config.storage}, AI: ${config.ai}, worker: ${config.worker.mode})`,
   );
-});
-
-server.on("close", () => {
-  void prisma.$disconnect();
 });
 
 process.on("SIGTERM", () => {
@@ -28,5 +25,5 @@ process.on("SIGTERM", () => {
   server.close(() => {
     console.debug("HTTP server closed");
   });
-  void worker?.stop();
+  void worker?.stop().finally(() => prisma.$disconnect());
 });

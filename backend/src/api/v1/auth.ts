@@ -1,109 +1,65 @@
 import bcrypt from "bcrypt";
-import { Router } from "express";
+import { Hono } from "hono";
 import type { Deps } from "../../core/types";
-import { restrict } from "./http";
+import type { AppEnv } from "./env";
+import { restrict, sendStatus, userIdOf } from "./http";
+
+// Reads a JSON body, treating a missing or malformed body as empty (each route then returns 400).
+async function bodyOf(c: {
+  req: { json: () => Promise<unknown> };
+}): Promise<Record<string, unknown>> {
+  const body = await c.req.json().catch(() => ({}));
+  return typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {};
+}
 
 export default function authRouter({ prisma }: Deps) {
-  const router = Router();
+  const router = new Hono<AppEnv>();
 
-  router.post("/signup", async (request, response) => {
-    try {
-      const { email, password, fullname } = request.body;
-
-      if (!email || !password || !fullname) {
-        return response.sendStatus(400 /* Bad Request */);
-      }
-
-      const user = await prisma.user.create({
-        data: {
-          email: email,
-          password: await hashPassword(password),
-          fullname: fullname,
-        },
-      });
-
-      return response.status(200 /* OK */).json({
-        id: user.id,
-        email: user.email,
-        fullname: user.fullname,
-      });
-    } catch (error) {
-      console.error(error);
-      response.sendStatus(500);
+  router.post("/signup", async (c) => {
+    const { email, password, fullname } = await bodyOf(c);
+    if (
+      typeof email !== "string" ||
+      typeof password !== "string" ||
+      typeof fullname !== "string" ||
+      !email ||
+      !password ||
+      !fullname
+    ) {
+      return sendStatus(c, 400);
     }
+
+    const user = await prisma.user.create({
+      data: { email, password: await hashPassword(password), fullname },
+    });
+    return c.json({ id: user.id, email: user.email, fullname: user.fullname }, 200);
   });
 
-  router.post("/login", async (request, response) => {
-    try {
-      const { email, password } = request.body;
-
-      if (!email || !password) {
-        return response.sendStatus(400 /* Bad Request */);
-      }
-
-      const user = await prisma.user.findUnique({
-        where: { email: email },
-      });
-
-      if (user === null || !(await verifyPassword(password, user.password))) {
-        return response.sendStatus(404 /* Not Found */);
-      }
-
-      request.session.regenerate((error) => {
-        if (error) {
-          console.error("Error in [/login]:", error);
-          return response.sendStatus(500 /* Internal Server Error */);
-        }
-        request.session.userId = user.id; // set the ID to know which user is making a request next time
-
-        return response.status(200).json({
-          id: user.id,
-          email: user.email,
-          fullname: user.fullname,
-        });
-      });
-    } catch (error) {
-      console.error(error);
-      response.sendStatus(500);
+  router.post("/login", async (c) => {
+    const { email, password } = await bodyOf(c);
+    if (typeof email !== "string" || typeof password !== "string" || !email || !password) {
+      return sendStatus(c, 400);
     }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (user === null || !(await verifyPassword(password, user.password))) {
+      return sendStatus(c, 404);
+    }
+
+    // The whole session lives in an encrypted cookie, so there is no server-side
+    // session for an attacker to plant; no regeneration is needed on login.
+    c.get("session").set("userId", user.id);
+    return c.json({ id: user.id, email: user.email, fullname: user.fullname }, 200);
   });
 
-  router.post("/logout", (request, response) => {
-    try {
-      request.session.destroy((error) => {
-        if (error) {
-          console.error("Error in [/logout]:", error);
-          return response.sendStatus(500);
-        }
-
-        return response.sendStatus(200);
-      });
-    } catch (error) {
-      console.error(error);
-      response.sendStatus(500);
-    }
+  router.post("/logout", (c) => {
+    c.get("session").deleteSession();
+    return sendStatus(c, 200);
   });
 
-  router.get("/info", restrict, async (req, res) => {
-    try {
-      const userId = req.session.userId;
-
-      const user = await prisma.user.findUnique({
-        where: {
-          id: userId,
-        },
-      });
-
-      if (user === null) return res.sendStatus(404 /* Not Found */);
-
-      return res.status(200).json({
-        email: user.email,
-        fullname: user.fullname,
-      });
-    } catch (error) {
-      console.error(error);
-      res.sendStatus(500);
-    }
+  router.get("/info", restrict, async (c) => {
+    const user = await prisma.user.findUnique({ where: { id: userIdOf(c) } });
+    if (user === null) return sendStatus(c, 404);
+    return c.json({ email: user.email, fullname: user.fullname }, 200);
   });
 
   return router;
