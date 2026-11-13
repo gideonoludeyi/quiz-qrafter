@@ -35,7 +35,9 @@ test("sign up, generate a quiz, edit it, and download the PDF", async ({ page })
 
   await test.step("upload notes and watch the quiz being written", async () => {
     await expect(page.getByText("Upload your notes to generate your first quiz.")).toBeVisible();
-    await page.getByLabel("Choose File").setInputFiles(path.join(__dirname, "fixtures/notes.txt"));
+    await page
+      .getByLabel("Choose File")
+      .setInputFiles(path.join(import.meta.dirname, "fixtures/notes.txt"));
     await page.getByRole("button", { name: "Upload & generate" }).click();
 
     await expect(page.getByText("Making a quiz from notes.txt")).toBeVisible();

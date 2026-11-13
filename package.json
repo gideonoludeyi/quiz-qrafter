@@ -11,6 +11,7 @@
         "backend/",
         "frontend/"
     ],
+    "type": "module",
     "scripts": {
         "start": "vp run --filter backend start",
         "build": "vp run --filter @quizqrafter/shared build && vp run --filter backend --filter frontend build",

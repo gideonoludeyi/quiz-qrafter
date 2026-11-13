@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parseEnv } from "node:util";
 
-export const BACKEND_DIR = path.resolve(__dirname, "..");
+export const BACKEND_DIR = path.resolve(import.meta.dirname, "..");
 
 const DEFAULT_URL = "postgres://myusername:mypassword@localhost:5432/mydb";
 
