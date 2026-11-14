@@ -18,7 +18,8 @@
         "dev": "vp run -r --parallel dev",
         "check-types": "vp run -r check-types",
         "prepare": "vp config",
-        "e2e": "playwright test"
+        "e2e": "playwright test",
+        "screenshots": "SCREENSHOTS=1 playwright test e2e/screenshots.spec.ts"
     },
     "devDependencies": {
         "@playwright/test": "^1.65.0",
