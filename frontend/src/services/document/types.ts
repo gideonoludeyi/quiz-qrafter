@@ -9,6 +9,8 @@ export interface DocumentJobService {
   list(): Promise<RequestResult<Document[]>>;
   // Starts a GenerateQuizJob for a document, replacing its existing quiz when done.
   startJob(documentId: number): Promise<RequestResult<GenerateQuizJob>>;
+  // Deletes a document with its quiz, jobs and stored files.
+  remove(documentId: number): Promise<RequestResult<void>>;
 }
 
 export interface DocumentService extends DocumentJobService {

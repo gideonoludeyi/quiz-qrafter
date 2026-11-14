@@ -15,6 +15,8 @@ type QuizContextValue = {
   load: (quizId: number) => Promise<boolean>;
   save: (draft: QuizDraft) => Promise<boolean>;
   downloadPdf: () => Promise<boolean>;
+  // Deletes the quiz; its document stays.
+  remove: () => Promise<boolean>;
   clear: () => void;
 };
 
@@ -79,14 +81,25 @@ export function QuizProvider({ service, children }: QuizProviderProps) {
     [run, service, quiz],
   );
 
+  const remove = useCallback(
+    async () =>
+      quiz !== null &&
+      run(
+        () => service.remove(quiz.id),
+        () => setQuiz(null),
+        t("quiz.deleteFailed"),
+      ),
+    [run, service, quiz],
+  );
+
   const clear = useCallback(() => {
     setQuiz(null);
     setError(null);
   }, []);
 
   const value = useMemo<QuizContextValue>(
-    () => ({ quiz, loading, error, load, save, downloadPdf, clear }),
-    [quiz, loading, error, load, save, downloadPdf, clear],
+    () => ({ quiz, loading, error, load, save, downloadPdf, remove, clear }),
+    [quiz, loading, error, load, save, downloadPdf, remove, clear],
   );
 
   return <QuizContext.Provider value={value}>{children}</QuizContext.Provider>;

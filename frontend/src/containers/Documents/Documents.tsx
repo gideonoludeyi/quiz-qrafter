@@ -10,6 +10,7 @@ import {
 import {
   RiArrowLeftLine,
   RiCloseLine,
+  RiDeleteBinLine,
   RiDownloadLine,
   RiRefreshLine,
   RiSaveLine,
@@ -18,6 +19,7 @@ import {
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -38,6 +40,8 @@ const ACCEPT = Object.values(ALLOWED_UPLOAD_TYPES).flat().join(",");
 const MAX_UPLOAD_MB = MAX_UPLOAD_BYTES / (1024 * 1024);
 
 type Tab = "viewer" | "quiz";
+// What a confirmation dialog is asking to delete.
+type Deleting = "document" | "quiz";
 
 // The documents list, and a side panel showing the selected document and its quiz.
 // The selection and tab live in the URL (?document=12&tab=quiz), so a reload keeps them.
@@ -50,6 +54,7 @@ const Documents = () => {
     load,
     save,
     downloadPdf,
+    remove: removeQuiz,
     clear,
     loading: quizLoading,
     error: quizError,
@@ -60,9 +65,11 @@ const Documents = () => {
   const [draft, setDraft] = useState<QuizDraft | null>(null);
   const [uploading, setUploading] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [confirming, setConfirming] = useState<Deleting | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const loaded = loadState.status === "loaded";
-  const busy = uploading || starting || quizLoading;
+  const busy = uploading || starting || deleting || quizLoading;
   const selected = documents.find((document) => document.id === selectedId) ?? null;
   const job = selected === null ? null : jobOf(selected.id);
   const jobActive = isJobActive(job);
@@ -160,6 +167,33 @@ const Documents = () => {
     const result = await store.start(documentId);
     setStarting(false);
     if (!result.ok) reportRequestError(result.error, t("jobs.startFailed"));
+  };
+
+  const handleDeleteDocument = async (documentId: number) => {
+    setDeleting(true);
+    const result = await store.remove(documentId);
+    setDeleting(false);
+    setConfirming(null);
+    if (!result.ok) {
+      reportRequestError(result.error, t("documents.deleteFailed"));
+      return;
+    }
+    toast.success(t("documents.deleted"));
+    if (selectedIdRef.current === documentId) {
+      clear();
+      navigate(null, tab);
+    }
+  };
+
+  const handleDeleteQuiz = async () => {
+    setDeleting(true);
+    const removed = await removeQuiz();
+    setDeleting(false);
+    setConfirming(null);
+    if (!removed) return; // The quiz panel shows why.
+    toast.success(t("quiz.deleted"));
+    // The Document no longer has a quiz, so it offers to generate one.
+    void store.refresh();
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -294,7 +328,20 @@ const Documents = () => {
             <Button
               variant="ghost"
               size="icon-sm"
-              className="ml-auto hidden lg:inline-flex"
+              className="ml-auto"
+              disabled={busy}
+              onClick={() => {
+                if (confirmDiscard()) setConfirming("document");
+              }}
+              aria-label={t("documents.delete")}
+              title={t("documents.delete")}
+            >
+              <RiDeleteBinLine />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="hidden lg:inline-flex"
               onClick={close}
               aria-label={t("documents.closeDocument")}
               title={t("common.close")}
@@ -336,6 +383,15 @@ const Documents = () => {
                   >
                     <RiRefreshLine data-icon="inline-start" />
                     {t("quiz.regenerate")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busy || !quiz}
+                    onClick={() => setConfirming("quiz")}
+                  >
+                    <RiDeleteBinLine data-icon="inline-start" />
+                    {t("quiz.delete")}
                   </Button>
                   <Button
                     size="sm"
@@ -387,6 +443,25 @@ const Documents = () => {
               </div>
             </div>
           </TabsContent>
+
+          <ConfirmDialog
+            open={confirming === "document"}
+            onOpenChange={(open) => !open && setConfirming(null)}
+            title={t("documents.confirmDelete.title", { filename: selected.filename })}
+            description={t("documents.confirmDelete.description")}
+            confirmLabel={t("documents.delete")}
+            busy={deleting}
+            onConfirm={() => void handleDeleteDocument(selected.id)}
+          />
+          <ConfirmDialog
+            open={confirming === "quiz"}
+            onOpenChange={(open) => !open && setConfirming(null)}
+            title={t("quiz.confirmDelete.title")}
+            description={t("quiz.confirmDelete.description")}
+            confirmLabel={t("quiz.delete")}
+            busy={deleting}
+            onConfirm={() => void handleDeleteQuiz()}
+          />
         </Tabs>
       )}
     </div>

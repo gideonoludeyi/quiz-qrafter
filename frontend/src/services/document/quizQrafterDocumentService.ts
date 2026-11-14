@@ -5,7 +5,7 @@ import {
   ListDocumentsResponseSchema,
   UploadDocumentResponseSchema,
 } from "@quizqrafter/shared";
-import { asBlob, asJson, asText, request, type RequestResult } from "../http";
+import { asBlob, asJson, asText, noBody, request, type RequestResult } from "../http";
 import type { DocumentService } from "./types";
 
 export class QuizQrafterDocumentService implements DocumentService {
@@ -36,6 +36,12 @@ export class QuizQrafterDocumentService implements DocumentService {
     return request(new URL("/api/v1/jobs", this.baseURL), asJson(GenerateQuizJobSchema), {
       method: "POST",
       json: { documentId },
+    });
+  }
+
+  remove(documentId: number): Promise<RequestResult<void>> {
+    return request(new URL(`/api/v1/document/${documentId}`, this.baseURL), noBody, {
+      method: "DELETE",
     });
   }
 

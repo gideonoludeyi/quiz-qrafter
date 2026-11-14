@@ -8,6 +8,8 @@ describe("describeAuthError", () => {
   it("words better-auth's codes from the catalogue, never with its own message", () => {
     const exists = { code: "USER_ALREADY_EXISTS", message: "User already exists.", status: 422 };
     expect(describeAuthError(exists, fallback)).toBe(t("auth.errors.accountExists"));
+    const wrong = { code: "INVALID_PASSWORD", message: "Invalid password", status: 400 };
+    expect(describeAuthError(wrong, fallback)).toBe(t("auth.errors.wrongPassword"));
   });
 
   it("calls a rate limit what it is, and falls back for anything else", () => {

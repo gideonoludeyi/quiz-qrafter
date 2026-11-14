@@ -12,6 +12,8 @@ type AuthContextValue = {
   signUp: (email: string, password: string, fullname: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   signOut: () => void;
+  // Deletes the account and forgets the user; rejects with the reason, such as a wrong password.
+  deleteAccount: (password: string) => Promise<void>;
   // Forgets the user without asking the server, after an API request answers 401.
   sessionLost: () => void;
   // Both reject with the reason when the request fails.
@@ -88,6 +90,12 @@ export function AuthProvider({ service, children }: AuthProviderProps) {
       .finally(() => setLoading(false));
   };
 
+  const deleteAccount = (password: string) =>
+    service.deleteAccount(password).then(() => {
+      setUser(null);
+      setError(null);
+    });
+
   return (
     <AuthContext.Provider
       value={{
@@ -99,6 +107,7 @@ export function AuthProvider({ service, children }: AuthProviderProps) {
         signUp,
         login,
         signOut,
+        deleteAccount,
         sessionLost: () => setUser(null),
         requestPasswordReset: (email, redirectTo) =>
           service.requestPasswordReset(email, redirectTo),

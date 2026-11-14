@@ -14,6 +14,7 @@ const AUTH_ERRORS: Record<string, string> = {
   PASSWORD_TOO_LONG: "auth.errors.passwordTooLong",
   INVALID_TOKEN: "auth.errors.resetLinkInvalid",
   TOKEN_EXPIRED: "auth.errors.resetLinkInvalid",
+  INVALID_PASSWORD: "auth.errors.wrongPassword",
 };
 
 // The words for a better-auth error: by its code, as a rate limit, or else `fallback`.
@@ -64,6 +65,11 @@ export class QuizQrafterAuthService implements AuthService {
   async signOut(): Promise<void> {
     const { error } = await this.client.signOut();
     throwIfError(error, t("auth.errors.signOutFailed"));
+  }
+
+  async deleteAccount(password: string): Promise<void> {
+    const { error } = await this.client.deleteUser({ password });
+    throwIfError(error, t("auth.errors.deleteAccountFailed"));
   }
 
   async requestPasswordReset(email: string, redirectTo: string): Promise<void> {

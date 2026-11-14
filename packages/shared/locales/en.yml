@@ -10,6 +10,7 @@ common:
   appName: Quiz Qrafter
   loading: Loading…
   close: Close
+  cancel: Cancel
   save: Save
   retry: Retry
   tryAgain: Try again
@@ -24,6 +25,13 @@ auth:
   password: Password
   logIn: Log in
   logOut: Log out
+  deleteAccount: Delete account
+  # The dialog that confirms deleting an account, behind the password.
+  deleteAccountDialog:
+    title: Delete your account?
+    description: This permanently deletes your account and all of your documents and quizzes. It can't be undone.
+    passwordLabel: Enter your password to confirm
+    submit: Delete my account
   signUp: Sign up
   # Under the log-in and sign-up forms; terms and privacy are links on the sign-up page.
   finePrint: "By signing up, you agree to Quiz Qrafter's {{terms}} and {{privacy}}."
@@ -78,6 +86,8 @@ auth:
     signOutFailed: Could not sign out.
     resetRequestFailed: Could not send the reset link.
     resetFailed: Could not update the password.
+    wrongPassword: The password is incorrect.
+    deleteAccountFailed: Could not delete the account.
 
 documents:
   title: Documents
@@ -96,6 +106,13 @@ documents:
   noMatches: No documents match this filter.
   back: Back to documents
   closeDocument: Close document
+  delete: Delete document
+  # The dialog that confirms deleting a document.
+  confirmDelete:
+    title: Delete {{filename}}?
+    description: This permanently deletes the document and its quiz, including your edits.
+  deleted: Document deleted.
+  deleteFailed: The document couldn't be deleted.
   tabs:
     viewer: Viewer
     quiz: Quiz
@@ -141,6 +158,13 @@ quiz:
   regenerate: Regenerate
   confirmRegenerate: Regenerating replaces this quiz, including your edits. Continue?
   downloadPdf: Download PDF
+  delete: Delete quiz
+  # The dialog that confirms deleting a quiz; its document stays.
+  confirmDelete:
+    title: Delete this quiz?
+    description: This permanently deletes the quiz, including your edits. The document stays, and you can generate a new quiz from it.
+  deleted: Quiz deleted.
+  deleteFailed: The quiz couldn't be deleted.
   unsavedChanges: Unsaved changes
   confirmDiscard: You have unsaved changes. Discard them?
   ready: Your quiz is ready.

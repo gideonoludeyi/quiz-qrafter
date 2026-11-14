@@ -4,6 +4,8 @@ export interface AuthService {
   signUp(info: SignUpInfo): Promise<User>;
   login(credentials: LoginCredentials): Promise<User>;
   signOut(): Promise<void>;
+  // Deletes the account, its documents and quizzes, and ends the session. Needs the password.
+  deleteAccount(password: string): Promise<void>;
   // Emails a reset link if the address has an account; resolves the same way either way.
   requestPasswordReset(email: string, redirectTo: string): Promise<void>;
   resetPassword(token: string, newPassword: string): Promise<void>;

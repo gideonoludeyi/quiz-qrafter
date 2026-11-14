@@ -162,3 +162,58 @@ test("a session that ends while editing a quiz sends you to sign in", async ({ p
   await page.getByRole("button", { name: t("common.save") }).click();
   await page.waitForURL("**/login");
 });
+
+test("delete a quiz, then its document, then the account", async ({ page }) => {
+  const email = `e2e-delete-${Date.now()}@example.com`;
+  await page.goto("/signup");
+  await page.locator("#firstname").pressSequentially("Marie");
+  await page.locator("#lastname").pressSequentially("Curie");
+  await page.locator("#email").pressSequentially(email);
+  await page.locator("#password").pressSequentially(PASSWORD);
+  await nudge(page.locator("#lastname"));
+  await page.getByRole("button", { name: t("auth.signUp") }).click();
+  await page.waitForURL("**/dashboard");
+
+  await page
+    .getByLabel(t("documents.uploadLabel"))
+    .setInputFiles(path.join(import.meta.dirname, "fixtures/notes.txt"));
+  // The other tests' jobs share the e2e worker, so this one may wait its turn.
+  await expect(page.locator("#quiz-title")).toHaveValue("Sample quiz", { timeout: 20_000 });
+  const dialog = page.getByRole("dialog");
+
+  await test.step("delete the quiz, which leaves the document", async () => {
+    await page.getByRole("button", { name: t("quiz.delete") }).click();
+    await dialog.getByRole("button", { name: t("quiz.delete") }).click();
+    await expect(page.getByText(t("quiz.deleted"))).toBeVisible();
+    await expect(page.getByRole("button", { name: t("quiz.generate") })).toBeVisible();
+    await expect(documentRow(page, "notes.txt")).toContainText(t("documents.summary.notStarted"));
+  });
+
+  await test.step("delete the document", async () => {
+    await page.getByRole("button", { name: t("documents.delete") }).click();
+    await expect(dialog).toContainText(t("documents.confirmDelete.description"));
+    await dialog.getByRole("button", { name: t("documents.delete") }).click();
+    await expect(page.getByText(t("documents.deleted"))).toBeVisible();
+    await expect(page.getByText(t("documents.empty"))).toBeVisible();
+  });
+
+  await test.step("a wrong password doesn't delete the account", async () => {
+    await page.getByRole("button", { name: t("auth.deleteAccount") }).click();
+    await page.getByLabel(t("auth.deleteAccountDialog.passwordLabel")).fill("WrongPassword1");
+    await dialog.getByRole("button", { name: t("auth.deleteAccountDialog.submit") }).click();
+    await expect(dialog).toContainText(t("auth.errors.wrongPassword"));
+  });
+
+  await test.step("delete the account, which signs out for good", async () => {
+    await page.getByLabel(t("auth.deleteAccountDialog.passwordLabel")).fill(PASSWORD);
+    await dialog.getByRole("button", { name: t("auth.deleteAccountDialog.submit") }).click();
+    await page.waitForURL("**/login");
+
+    await page.locator("#email").pressSequentially(email);
+    await page.locator("#password").pressSequentially(PASSWORD);
+    await nudge(page.locator("#email"));
+    await page.getByRole("button", { name: t("auth.logIn") }).click();
+    await expect(page.getByText(t("auth.errors.wrongCredentials"))).toBeVisible();
+    expect(page.url()).toMatch(/\/login$/);
+  });
+});

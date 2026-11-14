@@ -1,17 +1,25 @@
-import React from "react";
-import { RiFolder3Line, RiLogoutBoxRLine, RiMoonLine, RiSunLine } from "@remixicon/react";
+import React, { useState } from "react";
+import {
+  RiFolder3Line,
+  RiLogoutBoxRLine,
+  RiMoonLine,
+  RiSunLine,
+  RiUserUnfollowLine,
+} from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { t } from "@/i18n";
 import { useAuth } from "../../services/auth";
 import LogoDark from "../../assets/quiz_qrafter_logo_dark.svg";
 import LogoLight from "../../assets/quiz_qrafter_logo_light.svg";
 import { useTheme } from "../../containers/Admin/ThemeContext";
+import DeleteAccountDialog from "../../containers/Auth/DeleteAccountDialog";
 import Documents from "../../containers/Documents/Documents";
 
 // The signed-in app: a sidebar, and the documents workspace in an inset panel.
 const Dashboard: React.FC = () => {
   const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const switchTheme =
     theme === "dark" ? t("common.theme.switchToLight") : t("common.theme.switchToDark");
   const logo = (
@@ -30,6 +38,15 @@ const Dashboard: React.FC = () => {
         title={switchTheme}
       >
         {theme === "dark" ? <RiSunLine /> : <RiMoonLine />}
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        onClick={() => setDeletingAccount(true)}
+        aria-label={t("auth.deleteAccount")}
+        title={t("auth.deleteAccount")}
+      >
+        <RiUserUnfollowLine />
       </Button>
       <Button variant="ghost" size="sm" onClick={() => signOut()}>
         <RiLogoutBoxRLine data-icon="inline-start" />
@@ -71,6 +88,7 @@ const Dashboard: React.FC = () => {
           <Documents />
         </div>
       </main>
+      <DeleteAccountDialog open={deletingAccount} onOpenChange={setDeletingAccount} />
     </div>
   );
 };

@@ -51,6 +51,7 @@ function fakeService(documents: Document[] = []) {
     list: vi.fn<DocumentJobService["list"]>(async () => ok(server.documents)),
     upload: vi.fn<DocumentJobService["upload"]>(),
     startJob: vi.fn<DocumentJobService["startJob"]>(),
+    remove: vi.fn<DocumentJobService["remove"]>(),
   };
   return { server, service };
 }
@@ -336,6 +337,45 @@ describe("start and upload", () => {
     answer(ok([doc(1)]));
     await refreshed;
     expect(store.documents().map((document) => document.id)).toEqual([2, 1]);
+  });
+});
+
+describe("remove", () => {
+  it("drops a deleted Document and its job, and stops polling for it", async () => {
+    const { server, service, store } = setup([doc(2, job(5, 2, "running")), doc(1)]);
+    await advance();
+    service.remove.mockImplementationOnce(async (documentId) => {
+      server.documents = server.documents.filter((document) => document.id !== documentId);
+      return ok(undefined);
+    });
+    expect(await store.remove(2)).toEqual({ ok: true });
+    expect(service.remove).toHaveBeenCalledWith(2);
+    expect(store.documents().map((document) => document.id)).toEqual([1]);
+    expect(store.jobOf(2)).toBeNull();
+
+    await advance(POLL_INTERVAL_MS * 10);
+    expect(service.list).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a deleted Document out of a list requested before the delete", async () => {
+    const { service, store } = setup([doc(2), doc(1)]);
+    await advance();
+    let answer: (result: RequestResult<Document[]>) => void = () => {};
+    service.list.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
+    const refreshed = store.refresh();
+    service.remove.mockResolvedValueOnce(ok(undefined));
+    await store.remove(2);
+    answer(ok([doc(2), doc(1)]));
+    await refreshed;
+    expect(store.documents().map((document) => document.id)).toEqual([1]);
+  });
+
+  it("returns the error and keeps the Document when the delete fails", async () => {
+    const { service, store } = setup([doc(1)]);
+    await advance();
+    service.remove.mockResolvedValueOnce(fail(networkError));
+    expect(await store.remove(1)).toEqual({ ok: false, error: networkError });
+    expect(store.documents().map((document) => document.id)).toEqual([1]);
   });
 });
 

@@ -23,6 +23,7 @@ export type UploadResult =
   | { ok: true; document: Document; job: GenerateQuizJob }
   | { ok: false; error: RequestError };
 export type StartResult = { ok: true; job: GenerateQuizJob } | { ok: false; error: RequestError };
+export type RemoveResult = { ok: true } | { ok: false; error: RequestError };
 
 // The page's focus and visibility, so tests can drive them without a DOM.
 export type PageEvents = {
@@ -54,6 +55,8 @@ export type DocumentsStore = {
   getSnapshot: () => DocumentsSnapshot;
   upload: (file: File) => Promise<UploadResult>;
   start: (documentId: number) => Promise<StartResult>;
+  // Deletes a Document on the server, then drops it and its job from the list.
+  remove: (documentId: number) => Promise<RemoveResult>;
   refresh: () => Promise<void>;
   subscribe: (listener: () => void) => () => void;
   // Called once per GenerateQuizJob seen going from Active to succeeded or failed.
@@ -93,6 +96,8 @@ export function createDocumentsStore(
   let inFlight: Promise<void> | null = null;
   // Bumped by each upload, so a list requested before it can't drop the new Document.
   let uploads = 0;
+  // Deleted Documents, kept out of any list requested before their deletion.
+  const removed = new Set<number>();
 
   const update = (next: Partial<DocumentsSnapshot>) => {
     snapshot = { ...snapshot, ...next };
@@ -158,11 +163,12 @@ export function createDocumentsStore(
 
     signedOut = false;
     interval = POLL_INTERVAL_MS;
+    const listed = result.value.filter((document) => !removed.has(document.id));
     const { jobs, finished } = mergeJobs(
-      result.value.flatMap((document) => (document.latestJob ? [document.latestJob] : [])),
+      listed.flatMap((document) => (document.latestJob ? [document.latestJob] : [])),
     );
     // A list requested before an upload finished lacks the new Document; the next poll has it.
-    const documents = requestUploads === uploads ? result.value : snapshot.documents;
+    const documents = requestUploads === uploads ? listed : snapshot.documents;
     update({ documents, jobs: jobs ?? snapshot.jobs, loadState: { status: "loaded" } });
     notifyFinished(finished);
   };
@@ -213,6 +219,20 @@ export function createDocumentsStore(
       return { ok: true, job: result.value };
     },
 
+    async remove(documentId) {
+      const result = await service.remove(documentId);
+      if (!result.ok) return result;
+      removed.add(documentId);
+      const jobs = new Map(snapshot.jobs);
+      jobs.delete(documentId);
+      update({
+        documents: snapshot.documents.filter((document) => document.id !== documentId),
+        jobs,
+      });
+      schedule();
+      return { ok: true };
+    },
+
     refresh,
 
     subscribe(listener) {
@@ -234,6 +254,7 @@ export function createDocumentsStore(
       inFlight = null;
       clearTimer();
       finishedJobIds.clear();
+      removed.clear();
       update({ documents: [], jobs: new Map(), loadState: { status: "loading" } });
 
       const unsubscribe = page.subscribe((change) => {
