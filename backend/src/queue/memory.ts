@@ -1,4 +1,4 @@
-import { MAX_RUNS, giveUpQuizJob, processQuizJob } from "../core/jobs";
+import { MAX_RUNS, giveUpGenerateQuizJob, processGenerateQuizJob } from "../core/jobs";
 import type { Deps, MessageState, QuizQueue } from "../core/types";
 
 type RunDeps = Pick<Deps, "prisma" | "providers">;
@@ -9,28 +9,28 @@ export function createMemoryQueue() {
   const runs = new Map<number, number>();
 
   // Gives a job its next run, as a worker would. Overlapping calls act like a takeover after a stall.
-  async function deliver(deps: RunDeps, quizJobId: number): Promise<void> {
-    const run = (runs.get(quizJobId) ?? 0) + 1;
-    runs.set(quizJobId, run);
+  async function deliver(deps: RunDeps, generateQuizJobId: number): Promise<void> {
+    const run = (runs.get(generateQuizJobId) ?? 0) + 1;
+    runs.set(generateQuizJobId, run);
     const final = run >= MAX_RUNS;
     try {
-      await processQuizJob(deps, quizJobId, { run, final });
-      states.set(quizJobId, "finished");
+      await processGenerateQuizJob(deps, generateQuizJobId, { run, final });
+      states.set(generateQuizJobId, "finished");
     } catch {
       if (!final) return; // Still waiting, for a retry.
-      states.set(quizJobId, "finished");
-      await giveUpQuizJob(deps, quizJobId);
+      states.set(generateQuizJobId, "finished");
+      await giveUpGenerateQuizJob(deps, generateQuizJobId);
     }
   }
 
   const waiting = () => [...states].filter(([, state]) => state === "waiting").map(([id]) => id);
 
   return {
-    async send(quizJobId: number) {
-      if (!states.has(quizJobId)) states.set(quizJobId, "waiting");
+    async send(generateQuizJobId: number) {
+      if (!states.has(generateQuizJobId)) states.set(generateQuizJobId, "waiting");
     },
-    async stateOf(quizJobId: number) {
-      return states.get(quizJobId) ?? "gone";
+    async stateOf(generateQuizJobId: number) {
+      return states.get(generateQuizJobId) ?? "gone";
     },
     deliver,
     // Delivers jobs until none are waiting, retrying failures at once.
@@ -40,8 +40,8 @@ export function createMemoryQueue() {
       }
     },
     // Drops a job's message, as if sending it had been lost.
-    lose(quizJobId: number) {
-      states.delete(quizJobId);
+    lose(generateQuizJobId: number) {
+      states.delete(generateQuizJobId);
     },
   } satisfies QuizQueue & Record<string, unknown>;
 }

@@ -1,6 +1,6 @@
 import {
   type Document,
-  type QuizJob,
+  type GenerateQuizJob,
   ListDocumentsResponseSchema,
   UploadDocumentResponseSchema,
 } from "@quizqrafter/shared";
@@ -10,7 +10,7 @@ import type { DocumentService } from "./types";
 export class QuizQrafterDocumentService implements DocumentService {
   constructor(private readonly baseURL: URL) {}
 
-  async upload(file: File): Promise<{ document: Document; job: QuizJob }> {
+  async upload(file: File): Promise<{ document: Document; job: GenerateQuizJob }> {
     const formData = new FormData();
     formData.append("file", file);
 

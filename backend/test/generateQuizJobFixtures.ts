@@ -12,7 +12,7 @@ import { FileBlobStore } from "../src/providers/fake/fileBlobStore";
 import type { QuizGenerator } from "../src/providers/types";
 import { testDatabaseUrl } from "./testDatabase";
 
-// Shared setup for the quiz job tests: the database, a file store, and stub quiz writers.
+// Shared setup for the GenerateQuizJob tests: the database, a file store, and stub quiz writers.
 export const prisma = new PrismaClient({ datasources: { db: { url: testDatabaseUrl() } } });
 export const blobDir = mkdtempSync(path.join(tmpdir(), "quizqrafter-jobs-"));
 const blobs = new FileBlobStore(blobDir);
@@ -52,7 +52,7 @@ export async function newUser() {
   return prisma.user.create({ data: { email: `jobs-${randomUUID()}@example.com`, name: "Jobs" } });
 }
 
-// Uploads a text file for the user, which starts its quiz job.
+// Uploads a text file for the user, which starts its GenerateQuizJob.
 export async function upload(deps: Deps, userId: number, filename = "notes.txt") {
   const { document, job } = await uploadDocument(deps, userId, {
     filename,
@@ -69,7 +69,7 @@ export async function userWithDocument(deps: Deps) {
   return { userId: user.id, ...(await upload(deps, user.id)) };
 }
 
-export const jobRow = (id: number) => prisma.quizJob.findUniqueOrThrow({ where: { id } });
+export const jobRow = (id: number) => prisma.generateQuizJob.findUniqueOrThrow({ where: { id } });
 
 // Waits until `check` passes, for work done in the background.
 export async function eventually<T>(check: () => Promise<T>, timeoutMs = 10_000): Promise<T> {

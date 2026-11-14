@@ -5,7 +5,7 @@ import {
   MAX_UPLOAD_BYTES,
   type QuizDraft,
   QuizDraftSchema,
-  type QuizJob,
+  type GenerateQuizJob,
   uploadTypeFor,
 } from "@quizqrafter/shared";
 import {
@@ -26,7 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { useDocumentAPI } from "../../services/document/context";
 import { useQuizAPI } from "../../services/quiz/context";
-import { useQuizJob } from "../../services/quiz/useQuizJob";
+import { useGenerateQuizJob } from "../../services/quiz/useGenerateQuizJob";
 import JobStatus from "../Admin/JobStatus";
 import QuizEditor, { findDraftProblem } from "../Admin/QuizEditor";
 import DocumentList, { StateIcon, stateOf } from "./DocumentList";
@@ -41,7 +41,7 @@ const LIST_POLL_MS = 3_000;
 type Tab = "viewer" | "quiz";
 
 // The job worth showing for a document: one in progress, or one that failed.
-function visibleJob(document: Document): QuizJob | null {
+function visibleJob(document: Document): GenerateQuizJob | null {
   const job = document.latestJob;
   return job !== null && job.status !== "succeeded" ? job : null;
 }
@@ -65,10 +65,10 @@ const Documents = () => {
   const tab: Tab = params.get("tab") === "quiz" ? "quiz" : "viewer";
   const [loaded, setLoaded] = useState(false);
   const [draft, setDraft] = useState<QuizDraft | null>(null);
-  // The selected document's job, as last set by this page; useQuizJob keeps it current.
-  const [trackedJob, setTrackedJob] = useState<QuizJob | null>(null);
+  // The selected document's job, as last set by this page; useGenerateQuizJob keeps it current.
+  const [trackedJob, setTrackedJob] = useState<GenerateQuizJob | null>(null);
 
-  const job = useQuizJob(trackedJob, (finished) => {
+  const job = useGenerateQuizJob(trackedJob, (finished) => {
     void refresh();
     if (finished.status === "succeeded") {
       setTrackedJob(null);
@@ -131,7 +131,7 @@ const Documents = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, selectedKey]);
 
-  // Keep other documents' progress current; the open one is followed by useQuizJob.
+  // Keep other documents' progress current; the open one is followed by useGenerateQuizJob.
   const othersActive = documents.some(
     (document) => document.id !== selectedId && isJobActive(document.latestJob),
   );

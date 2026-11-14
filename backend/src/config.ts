@@ -45,7 +45,7 @@ const EnvSchema = z.object({
       .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
       .default("bullmq"),
   ),
-  // Each worker process runs this many quiz jobs at once.
+  // Each worker process runs this many GenerateQuizJobs at once.
   WORKER_CONCURRENCY: blankAsUnset(z.coerce.number().int().min(1).default(2)),
   // The worker process's health check port.
   WORKER_PORT: blankAsUnset(z.coerce.number().int().default(8081)),
@@ -88,7 +88,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   if (env.WORKER) {
     log(
       "warn",
-      "WORKER is no longer used: the API never runs quiz jobs. Start workers with `npm run worker`.",
+      "WORKER is no longer used: the API never runs GenerateQuizJobs. Start workers with `npm run worker`.",
     );
   }
 

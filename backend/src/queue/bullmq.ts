@@ -9,18 +9,18 @@ import {
 import {
   MAX_RUNS,
   RETRY_DELAY_MS,
-  giveUpQuizJob,
-  processQuizJob,
-  reconcileQuizJobs,
+  giveUpGenerateQuizJob,
+  processGenerateQuizJob,
+  reconcileGenerateQuizJobs,
 } from "../core/jobs";
 import type { Deps, MessageState, QuizQueue } from "../core/types";
 import { log } from "../observability/events";
 
-// The BullMQ queue carrying quiz jobs from the API to the workers.
-export const QUIZ_QUEUE = "quiz-jobs";
+// The BullMQ queue carrying GenerateQuizJobs from the API to the workers.
+export const QUIZ_QUEUE = "generate-quiz-jobs";
 
-// Each message names a `quiz_jobs` row; the row holds the job's status and progress.
-type QuizJobMessage = { quizJobId: number };
+// Each message names a GenerateQuizJob row; the row holds its status and progress.
+type GenerateQuizJobMessage = { generateQuizJobId: number };
 
 // Where the queue lives: the app's database, in its own schema.
 export type QueueSettings = { databaseUrl: string | undefined; schema: string };
@@ -29,13 +29,13 @@ export type QueueSettings = { databaseUrl: string | undefined; schema: string };
 const JOB_OPTIONS = {
   attempts: MAX_RUNS,
   backoff: { type: "exponential", delay: RETRY_DELAY_MS },
-  // The quiz_jobs row is the history, so BullMQ only keeps recent jobs for debugging.
+  // The GenerateQuizJob row is the history, so BullMQ only keeps recent jobs for debugging.
   removeOnComplete: { count: 100 },
   removeOnFail: { count: 100 },
 } as const;
 
 // The BullMQ job id for a row, so sending the same row twice is a no-op.
-export const messageIdFor = (quizJobId: number) => `quiz-job-${quizJobId}`;
+export const messageIdFor = (generateQuizJobId: number) => `generate-quiz-job-${generateQuizJobId}`;
 
 // Connection options for BullMQ's Postgres backend, which creates its tables on first connect.
 function queueConnection({ databaseUrl, schema }: QueueSettings): PostgresPoolConfig {
@@ -61,17 +61,17 @@ export type BullQuizQueue = QuizQueue & {
   close(): Promise<void>;
 };
 
-// Sends quiz jobs to the workers through BullMQ.
+// Sends GenerateQuizJobs to the workers through BullMQ.
 export function createBullQueue(settings: QueueSettings): BullQuizQueue {
   const bull = bullQueue(settings);
   return {
     bull,
-    async send(quizJobId) {
-      const message: QuizJobMessage = { quizJobId };
-      await bull.add("quiz", message, { jobId: messageIdFor(quizJobId) });
+    async send(generateQuizJobId) {
+      const message: GenerateQuizJobMessage = { generateQuizJobId };
+      await bull.add("quiz", message, { jobId: messageIdFor(generateQuizJobId) });
     },
-    async stateOf(quizJobId): Promise<MessageState> {
-      const state = await bull.getJobState(messageIdFor(quizJobId));
+    async stateOf(generateQuizJobId): Promise<MessageState> {
+      const state = await bull.getJobState(messageIdFor(generateQuizJobId));
       if (state === "unknown") return "gone";
       if (state === "completed" || state === "failed") return "finished";
       return "waiting";
@@ -89,18 +89,18 @@ type WorkerSettings = {
   bull?: Pick<WorkerOptions, "lockDuration" | "stalledInterval" | "drainDelay">;
 };
 
-// Reconciles unfinished jobs, then runs quiz jobs from the queue, up to `concurrency` at once.
+// Reconciles unfinished jobs, then runs GenerateQuizJobs from the queue, up to `concurrency` at once.
 export async function startBullWorker(
   deps: Omit<Deps, "queue">,
   { queue: queueSettings, concurrency, bull }: WorkerSettings,
 ): Promise<Worker> {
   const queue = createBullQueue(queueSettings);
-  await reconcileQuizJobs({ ...deps, queue });
+  await reconcileGenerateQuizJobs({ ...deps, queue });
 
   const worker = new BullWorker(
     QUIZ_QUEUE,
-    async (job: Job<QuizJobMessage>) =>
-      processQuizJob(deps, job.data.quizJobId, {
+    async (job: Job<GenerateQuizJobMessage>) =>
+      processGenerateQuizJob(deps, job.data.generateQuizJobId, {
         // attemptsStarted counts restarts after a stall too, so each delivery gets its own number.
         run: job.attemptsStarted,
         final: job.attemptsMade + 1 >= (job.opts.attempts ?? 1),
@@ -115,9 +115,9 @@ export async function startBullWorker(
     void job
       .isFailed()
       .then(async (failed) => {
-        if (failed) await giveUpQuizJob(deps, job.data.quizJobId);
+        if (failed) await giveUpGenerateQuizJob(deps, job.data.generateQuizJobId);
       })
-      .catch(() => {}); // giveUpQuizJob's event records the failure.
+      .catch(() => {}); // giveUpGenerateQuizJob's event records the failure.
   });
   worker.on("error", (error) => log("error", "Quiz worker error", {}, error));
 

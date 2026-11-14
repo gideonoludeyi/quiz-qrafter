@@ -3,7 +3,7 @@ import { z } from "zod";
 export const JOB_STATUSES = ["queued", "running", "succeeded", "failed"] as const;
 export const JOB_STAGES = ["reading", "writing"] as const;
 
-export const QuizJobSchema = z.object({
+export const GenerateQuizJobSchema = z.object({
   id: z.number().int(),
   documentId: z.number().int(),
   status: z.enum(JOB_STATUSES),
@@ -22,10 +22,10 @@ export const StartJobRequestSchema = z.object({
   documentId: z.number().int(),
 });
 
-export type QuizJob = z.infer<typeof QuizJobSchema>;
-export type JobStatus = QuizJob["status"];
-export type JobStage = NonNullable<QuizJob["stage"]>;
+export type GenerateQuizJob = z.infer<typeof GenerateQuizJobSchema>;
+export type JobStatus = GenerateQuizJob["status"];
+export type JobStage = NonNullable<GenerateQuizJob["stage"]>;
 
-export function isJobActive(job: Pick<QuizJob, "status"> | null | undefined): boolean {
+export function isJobActive(job: Pick<GenerateQuizJob, "status"> | null | undefined): boolean {
   return job?.status === "queued" || job?.status === "running";
 }

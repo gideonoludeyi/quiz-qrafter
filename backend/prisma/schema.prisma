@@ -85,14 +85,14 @@ model Document {
     filename         String
     mimeType         String
     size             Int
-    // Null until a quiz job has read the file.
+    // Null until a GenerateQuizJob has read the file.
     transcriptionURL String?
     rawURL           String
     createdAt        DateTime  @default(now())
     userId           Int
     user             User      @relation(fields: [userId], references: [id])
     quiz             Quiz?
-    jobs             QuizJob[]
+    jobs             GenerateQuizJob[]
 
     @@map("documents")
 }
@@ -146,7 +146,7 @@ enum JobStage {
 
 // One run of reading a document and writing its quiz. At most one per
 // document is queued or running (a partial unique index in the migration).
-model QuizJob {
+model GenerateQuizJob {
     id               Int       @id @default(autoincrement())
     document         Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
     documentId       Int
@@ -163,5 +163,5 @@ model QuizJob {
 
     @@index([status])
     @@index([documentId])
-    @@map("quiz_jobs")
+    @@map("generate_quiz_jobs")
 }

@@ -1,8 +1,8 @@
 import {
   type Quiz,
   type QuizDraft,
-  type QuizJob,
-  QuizJobSchema,
+  type GenerateQuizJob,
+  GenerateQuizJobSchema,
   QuizSchema,
 } from "@quizqrafter/shared";
 import { expectOk } from "../http";
@@ -13,7 +13,7 @@ const JSON_HEADERS = { "Content-Type": "application/json", Accept: "application/
 export class QuizQrafterQuizService implements QuizService {
   constructor(private readonly baseURL: URL) {}
 
-  async startJob(documentId: number): Promise<QuizJob> {
+  async startJob(documentId: number): Promise<GenerateQuizJob> {
     const res = await fetch(new URL("/api/v1/jobs", this.baseURL), {
       method: "POST",
       credentials: "include",
@@ -21,16 +21,16 @@ export class QuizQrafterQuizService implements QuizService {
       body: JSON.stringify({ documentId }),
     });
     await expectOk(res, "Failed to start writing the quiz");
-    return QuizJobSchema.parse(await res.json());
+    return GenerateQuizJobSchema.parse(await res.json());
   }
 
-  async getJob(id: number): Promise<QuizJob> {
+  async getJob(id: number): Promise<GenerateQuizJob> {
     const res = await fetch(new URL(`/api/v1/jobs/${id}`, this.baseURL), {
       credentials: "include",
       headers: { Accept: "application/json" },
     });
     await expectOk(res, "Failed to check on the quiz");
-    return QuizJobSchema.parse(await res.json());
+    return GenerateQuizJobSchema.parse(await res.json());
   }
 
   async get(id: number): Promise<Quiz> {

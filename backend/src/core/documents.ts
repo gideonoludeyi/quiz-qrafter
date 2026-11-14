@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
-import { type Document, type QuizJob, uploadTypeFor } from "@quizqrafter/shared";
-import { assertCanStartJob, startQuizJob, toQuizJob } from "./jobs";
+import { type Document, type GenerateQuizJob, uploadTypeFor } from "@quizqrafter/shared";
+import { assertCanStartJob, startGenerateQuizJob, toGenerateQuizJob } from "./jobs";
 import { annotate } from "../observability/events";
 import { readLocally } from "../providers/localText";
 import { type Deps, NotFoundError, UnsupportedFileError } from "./types";
@@ -23,7 +23,7 @@ function toDocument(row: DocumentRow): Document {
     size: row.size,
     createdAt: row.createdAt.toISOString(),
     quizId,
-    latestJob: latestJob ? toQuizJob(latestJob, quizId) : null,
+    latestJob: latestJob ? toGenerateQuizJob(latestJob, quizId) : null,
   };
 }
 
@@ -39,7 +39,7 @@ export async function uploadDocument(
   deps: Deps,
   userId: number,
   file: UploadedFile,
-): Promise<{ document: Document; job: QuizJob }> {
+): Promise<{ document: Document; job: GenerateQuizJob }> {
   const { prisma, providers } = deps;
   const mimeType = uploadTypeFor(file.mimeType, file.filename);
   if (mimeType === null) throw new UnsupportedFileError();
@@ -52,9 +52,9 @@ export async function uploadDocument(
     file.content,
   );
 
-  let job: QuizJob;
+  let job: GenerateQuizJob;
   try {
-    job = await startQuizJob(deps, userId, {
+    job = await startGenerateQuizJob(deps, userId, {
       newDocument: { filename: file.filename, mimeType, size: file.size, rawURL },
     });
   } catch (error) {
@@ -71,7 +71,7 @@ export async function uploadDocument(
   return { document: toDocument(row), job };
 }
 
-// Lists a user's documents, newest first, each with its latest quiz job.
+// Lists a user's documents, newest first, each with its latest GenerateQuizJob.
 export async function listDocuments({ prisma }: Deps, userId: number): Promise<Document[]> {
   const rows = await prisma.document.findMany({
     where: { userId },

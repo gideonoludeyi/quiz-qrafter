@@ -4,8 +4,8 @@ import { afterAll, beforeEach, describe, expect, it } from "vite-plus/test";
 import {
   MAX_ACTIVE_JOBS_PER_USER,
   MAX_RUNS,
-  reconcileQuizJobs,
-  startQuizJob,
+  reconcileGenerateQuizJobs,
+  startGenerateQuizJob,
 } from "../src/core/jobs";
 import { type Deps, NotFoundError, TooManyJobsError } from "../src/core/types";
 import { PermanentJobError } from "../src/providers/errors";
@@ -22,9 +22,9 @@ import {
   upload,
   userWithDocument,
   writes,
-} from "./quizJobFixtures";
+} from "./generateQuizJobFixtures";
 
-// The Quiz job module through its interface, with the in-memory queue standing in for BullMQ.
+// The GenerateQuizJob module through its interface, with the in-memory queue standing in for BullMQ.
 const queue = createMemoryQueue();
 const succeeding = depsWith(queue, writes());
 const failingWith = (error: Error) =>
@@ -46,14 +46,16 @@ function held() {
 }
 
 const activeJobs = (userId: number) =>
-  prisma.quizJob.count({ where: { status: { in: ["queued", "running"] }, document: { userId } } });
+  prisma.generateQuizJob.count({
+    where: { status: { in: ["queued", "running"] }, document: { userId } },
+  });
 
 beforeEach(async () => {
-  await prisma.quizJob.deleteMany();
+  await prisma.generateQuizJob.deleteMany();
 });
 
 afterAll(async () => {
-  await prisma.quizJob.deleteMany();
+  await prisma.generateQuizJob.deleteMany();
   await prisma.$disconnect();
 });
 
@@ -185,9 +187,9 @@ describe("a run's wide event", () => {
 describe("starting jobs", () => {
   it("returns the document's active job instead of starting another", async () => {
     const { userId, documentId, jobId } = await userWithDocument(succeeding);
-    const again = await startQuizJob(succeeding, userId, documentId);
+    const again = await startGenerateQuizJob(succeeding, userId, documentId);
     expect(again.id).toBe(jobId);
-    expect(await prisma.quizJob.count({ where: { documentId } })).toBe(1);
+    expect(await prisma.generateQuizJob.count({ where: { documentId } })).toBe(1);
   });
 
   it("limits how many jobs one user can have in progress", async () => {
@@ -213,7 +215,7 @@ describe("starting jobs", () => {
     );
 
     const results = await Promise.allSettled(
-      documents.map(({ id }) => startQuizJob(succeeding, userId, id)),
+      documents.map(({ id }) => startGenerateQuizJob(succeeding, userId, id)),
     );
 
     const refused = results.filter((result) => result.status === "rejected");
@@ -260,7 +262,7 @@ describe("starting jobs", () => {
   it("refuses to start a job for another user's document", async () => {
     const { documentId } = await userWithDocument(succeeding);
     const other = await newUser();
-    await expect(startQuizJob(succeeding, other.id, documentId)).rejects.toBeInstanceOf(
+    await expect(startGenerateQuizJob(succeeding, other.id, documentId)).rejects.toBeInstanceOf(
       NotFoundError,
     );
   });
@@ -270,7 +272,7 @@ describe("reconciling jobs", () => {
   it("re-sends an unfinished job whose message was lost", async () => {
     const { jobId } = await userWithDocument(succeeding);
     queue.lose(jobId);
-    await reconcileQuizJobs(succeeding);
+    await reconcileGenerateQuizJobs(succeeding);
     expect(await queue.stateOf(jobId)).toBe("waiting");
   });
 
@@ -278,9 +280,9 @@ describe("reconciling jobs", () => {
     const { jobId } = await userWithDocument(succeeding);
     await queue.deliver(succeeding, jobId);
     // As if the worker died before recording the outcome.
-    await prisma.quizJob.update({ where: { id: jobId }, data: { status: "running" } });
+    await prisma.generateQuizJob.update({ where: { id: jobId }, data: { status: "running" } });
 
-    await reconcileQuizJobs(succeeding);
+    await reconcileGenerateQuizJobs(succeeding);
     expect((await jobRow(jobId)).status).toBe("failed");
   });
 });

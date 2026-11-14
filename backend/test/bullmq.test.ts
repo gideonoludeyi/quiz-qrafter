@@ -10,7 +10,7 @@ import {
   prisma,
   userWithDocument,
   writes,
-} from "./quizJobFixtures";
+} from "./generateQuizJobFixtures";
 import { testQueueSettings } from "./testDatabase";
 
 // The BullMQ adapter against real BullMQ on the test schema.
@@ -32,7 +32,7 @@ async function startTestWorker(deps: Deps, concurrency = 2) {
 
 beforeEach(async () => {
   await queue.bull.obliterate({ force: true });
-  await prisma.quizJob.deleteMany();
+  await prisma.generateQuizJob.deleteMany();
 });
 
 afterEach(async () => {
@@ -44,7 +44,7 @@ afterAll(async () => {
   // Leave no queued jobs behind for other suites (such as e2e) whose worker would pick them up.
   await queue.bull.obliterate({ force: true });
   await queue.close();
-  await prisma.quizJob.deleteMany();
+  await prisma.generateQuizJob.deleteMany();
   await prisma.$disconnect();
 });
 
@@ -52,7 +52,7 @@ describe("the BullMQ queue", () => {
   it("sends a job once, however often it is sent", async () => {
     const { jobId } = await userWithDocument(succeeding);
     await queue.send(jobId);
-    expect((await message(jobId))?.data).toEqual({ quizJobId: jobId });
+    expect((await message(jobId))?.data).toEqual({ generateQuizJobId: jobId });
     expect(await queue.bull.getJobCounts("waiting")).toEqual({ waiting: 1 });
   });
 

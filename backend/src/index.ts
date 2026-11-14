@@ -8,7 +8,7 @@ import { createBullQueue } from "./queue/bullmq";
 
 exitOnCrash();
 const config = loadConfig();
-// The API only sends quiz jobs to the queue; worker processes (`npm run worker`) run them.
+// The API only sends GenerateQuizJobs to the queue; worker processes (`npm run worker`) run them.
 const queue = createBullQueue(config.queue);
 const deps = { prisma, queue, providers: createProviders(config) };
 const app = createApp(config, deps);

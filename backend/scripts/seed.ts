@@ -3,7 +3,7 @@
 import { createAuth } from "../src/auth";
 import { loadConfig } from "../src/config";
 import { uploadDocument } from "../src/core/documents";
-import { getQuizJob } from "../src/core/jobs";
+import { getGenerateQuizJob } from "../src/core/jobs";
 import prisma from "../src/database";
 import { FAKE_SAMPLE_TEXT } from "../src/providers/fake/fakeExtractor";
 import { createProviders } from "../src/providers";
@@ -39,9 +39,9 @@ async function main() {
     mimeType: "text/plain",
   });
   await queue.deliverAll(deps);
-  const finished = await getQuizJob(deps, user.id, job.id);
+  const finished = await getGenerateQuizJob(deps, user.id, job.id);
 
-  console.error(`Seeded ${EMAIL} / ${PASSWORD}; quiz job ${job.id} ${finished.status}.`);
+  console.error(`Seeded ${EMAIL} / ${PASSWORD}; GenerateQuizJob ${job.id} ${finished.status}.`);
 }
 
 main()

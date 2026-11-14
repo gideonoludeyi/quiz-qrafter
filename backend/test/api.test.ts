@@ -7,7 +7,7 @@ import { PrismaClient } from "@prisma/client";
 import {
   DocumentSchema,
   MAX_UPLOAD_BYTES,
-  QuizJobSchema,
+  GenerateQuizJobSchema,
   QuizSchema,
   type Quiz,
 } from "@quizqrafter/shared";
@@ -87,7 +87,7 @@ describe("quiz API", () => {
       .attach("file", Buffer.from(NOTES), { filename: "notes.txt", contentType: "text/plain" })
       .expect(202);
     const document = DocumentSchema.parse(upload.body.document);
-    const job = QuizJobSchema.parse(upload.body.job);
+    const job = GenerateQuizJobSchema.parse(upload.body.job);
     expect(document).toMatchObject({
       filename: "notes.txt",
       mimeType: "text/plain",

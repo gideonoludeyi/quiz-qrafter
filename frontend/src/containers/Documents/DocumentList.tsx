@@ -1,4 +1,4 @@
-import { type Document, isJobActive, type QuizJob } from "@quizqrafter/shared";
+import { type Document, isJobActive, type GenerateQuizJob } from "@quizqrafter/shared";
 import {
   RiArrowDownSLine,
   RiCheckboxCircleFill,
@@ -15,7 +15,7 @@ import { formatDate, formatSize, KindIcon, kindLabel, kindOf } from "./kinds";
 export type DocumentState = "in_progress" | "failed" | "ready" | "not_started";
 
 // Where a document stands, from its latest job (or `job`, a fresher copy) and its quiz.
-export function stateOf(document: Document, job: QuizJob | null = null): DocumentState {
+export function stateOf(document: Document, job: GenerateQuizJob | null = null): DocumentState {
   const latest = job ?? document.latestJob;
   if (isJobActive(latest)) return "in_progress";
   if (latest?.status === "failed") return "failed";
@@ -51,7 +51,7 @@ export function StateIcon({ state, className }: { state: DocumentState; classNam
 }
 
 // A short description of a document's quiz, for its row.
-function quizSummary(state: DocumentState, job: QuizJob | null): string {
+function quizSummary(state: DocumentState, job: GenerateQuizJob | null): string {
   if (state === "ready") return "Quiz ready";
   if (state === "failed") return "Failed";
   if (state === "not_started") return "No quiz";
@@ -78,7 +78,7 @@ type DocumentListProps = {
   documents: Document[];
   selectedId: number | null;
   // A fresher copy of the selected document's job than the list has.
-  selectedJob: QuizJob | null;
+  selectedJob: GenerateQuizJob | null;
   onSelect: (document: Document) => void;
   disabled: boolean;
 };

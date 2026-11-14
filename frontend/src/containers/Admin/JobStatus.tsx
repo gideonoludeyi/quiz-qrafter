@@ -1,4 +1,4 @@
-import type { QuizJob } from "@quizqrafter/shared";
+import type { GenerateQuizJob } from "@quizqrafter/shared";
 import { RiErrorWarningLine, RiRefreshLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +16,7 @@ import { Spinner } from "@/components/ui/spinner";
 const EXPECTED_QUESTIONS = 10;
 
 // What the job is doing, in words, and roughly how far along it is (0–100).
-function describe(job: QuizJob): { label: string; percent: number } {
+function describe(job: GenerateQuizJob): { label: string; percent: number } {
   if (job.status === "queued") return { label: "Waiting to start…", percent: 5 };
   switch (job.stage) {
     case "reading":
@@ -35,14 +35,14 @@ function describe(job: QuizJob): { label: string; percent: number } {
   }
 }
 
-// Shows a quiz job in progress, or why it failed with a way to try again.
+// Shows a GenerateQuizJob in progress, or why it failed with a way to try again.
 const JobStatus = ({
   job,
   filename,
   onRetry,
   retrying,
 }: {
-  job: QuizJob;
+  job: GenerateQuizJob;
   filename: string;
   onRetry: () => void;
   retrying: boolean;

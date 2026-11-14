@@ -1,12 +1,15 @@
-import { isJobActive, type QuizJob } from "@quizqrafter/shared";
+import { isJobActive, type GenerateQuizJob } from "@quizqrafter/shared";
 import { useEffect, useRef, useState } from "react";
 import { useQuizAPI } from "./context";
 
 const POLL_INTERVAL_MS = 1_500;
 
-// Follows a quiz job: polls it while it is queued or running, and calls `onFinish`
+// Follows a GenerateQuizJob: polls it while it is queued or running, and calls `onFinish`
 // once when it succeeds or fails. Returns the job's latest known state.
-export function useQuizJob(job: QuizJob | null, onFinish: (job: QuizJob) => void): QuizJob | null {
+export function useGenerateQuizJob(
+  job: GenerateQuizJob | null,
+  onFinish: (job: GenerateQuizJob) => void,
+): GenerateQuizJob | null {
   const { getJob } = useQuizAPI();
   const [tracked, setTracked] = useState({ source: job, current: job });
   // Start over whenever the caller passes a different job.
@@ -37,7 +40,7 @@ export function useQuizJob(job: QuizJob | null, onFinish: (job: QuizJob) => void
         }
       } catch (error) {
         // Keep polling: a dropped request shouldn't lose track of the job.
-        console.error("Checking the quiz job failed:", error);
+        console.error("Checking the GenerateQuizJob failed:", error);
       }
       if (!cancelled) timer = setTimeout(poll, POLL_INTERVAL_MS);
     };

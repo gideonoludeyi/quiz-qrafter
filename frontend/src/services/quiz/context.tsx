@@ -1,4 +1,4 @@
-import type { Quiz, QuizDraft, QuizJob } from "@quizqrafter/shared";
+import type { Quiz, QuizDraft, GenerateQuizJob } from "@quizqrafter/shared";
 import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { downloadBlob } from "../http";
 import type { QuizService } from "./types";
@@ -9,9 +9,9 @@ type QuizContextValue = {
   error: Error | null;
   // Each action resolves to true on success; on failure it sets `error` and resolves to false.
   // Resolves to the started job, or null on failure (with `error` set).
-  startJob: (documentId: number) => Promise<QuizJob | null>;
+  startJob: (documentId: number) => Promise<GenerateQuizJob | null>;
   // Fetches a job's latest state; rejects on failure without touching `error`.
-  getJob: (id: number) => Promise<QuizJob>;
+  getJob: (id: number) => Promise<GenerateQuizJob>;
   load: (quizId: number) => Promise<boolean>;
   save: (draft: QuizDraft) => Promise<boolean>;
   downloadPdf: () => Promise<boolean>;
@@ -48,7 +48,7 @@ export function QuizProvider({ service, children }: QuizProviderProps) {
 
   const startJob = useCallback(
     async (documentId: number) => {
-      let job: QuizJob | null = null;
+      let job: GenerateQuizJob | null = null;
       await run(async () => {
         job = await service.startJob(documentId);
       });

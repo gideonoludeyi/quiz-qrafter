@@ -1,17 +1,17 @@
 import type { PrismaClient } from "@prisma/client";
 import type { Providers } from "../providers/types";
 
-// Where a quiz job's queue message is: still to be run, finished with, or never sent.
+// Where a GenerateQuizJob's queue message is: still to be run, finished with, or never sent.
 export type MessageState = "waiting" | "finished" | "gone";
 
-// Carries quiz jobs to the workers. Adapters: BullMQ, and in-memory for tests and scripts.
+// Carries GenerateQuizJobs to the workers. Adapters: BullMQ, and in-memory for tests and scripts.
 export type QuizQueue = {
   // Sends a job to the workers; sending the same job twice is a no-op.
-  send(quizJobId: number): Promise<void>;
-  stateOf(quizJobId: number): Promise<MessageState>;
+  send(generateQuizJobId: number): Promise<void>;
+  stateOf(generateQuizJobId: number): Promise<MessageState>;
 };
 
-// One delivery of a quiz job to a worker. `run` is unique per delivery; no retry follows a `final` one.
+// One delivery of a GenerateQuizJob to a worker. `run` is unique per delivery; no retry follows a `final` one.
 export type Run = { run: number; final: boolean };
 
 // What core functions need: the database, the queue to the workers, and the external providers.
@@ -29,7 +29,7 @@ export class NotFoundError extends Error {
   }
 }
 
-// Thrown when a user already has the maximum number of quiz jobs in progress.
+// Thrown when a user already has the maximum number of GenerateQuizJobs in progress.
 export class TooManyJobsError extends Error {
   constructor(limit: number) {
     super(`You can have at most ${limit} quizzes in progress. Wait for one to finish.`);

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { QuizJobSchema } from "./job";
+import { GenerateQuizJobSchema } from "./job";
 
 // File types users can upload, with the extensions the file picker offers.
 export const ALLOWED_UPLOAD_TYPES = {
@@ -36,13 +36,13 @@ export const DocumentSchema = z.object({
   createdAt: z.string(),
   // Set once a quiz has been generated for this document.
   quizId: z.number().int().nullable(),
-  // The most recent quiz job for this document, if any.
-  latestJob: QuizJobSchema.nullable(),
+  // The most recent GenerateQuizJob for this document, if any.
+  latestJob: GenerateQuizJobSchema.nullable(),
 });
 
 export const UploadDocumentResponseSchema = z.object({
   document: DocumentSchema,
-  job: QuizJobSchema,
+  job: GenerateQuizJobSchema,
 });
 export const ListDocumentsResponseSchema = z.object({ documents: z.array(DocumentSchema) });
 

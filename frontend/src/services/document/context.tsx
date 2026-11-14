@@ -1,4 +1,4 @@
-import type { Document, QuizJob } from "@quizqrafter/shared";
+import type { Document, GenerateQuizJob } from "@quizqrafter/shared";
 import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
 import type { DocumentService } from "./types";
 
@@ -7,7 +7,7 @@ type DocumentContextValue = {
   loading: boolean;
   error: Error | null;
   // Resolves to the uploaded document and its job, or to the error (also set as `error`).
-  upload: (file: File) => Promise<{ document: Document; job: QuizJob } | Error>;
+  upload: (file: File) => Promise<{ document: Document; job: GenerateQuizJob } | Error>;
   // Reloads the document list and resolves to it (empty on failure).
   refresh: () => Promise<Document[]>;
   // The service itself, for the viewer's file and text requests.

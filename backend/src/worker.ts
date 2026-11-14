@@ -1,4 +1,4 @@
-// Runs quiz jobs from the queue. Start as many of these processes as you need.
+// Runs GenerateQuizJobs from the queue. Start as many of these processes as you need.
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { loadConfig } from "./config";
