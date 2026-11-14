@@ -19,7 +19,8 @@ const server = serve({ fetch: app.fetch, port: config.port }, () => {
   log("info", "API listening", { port: config.port, storage: config.storage, ai: config.ai });
 });
 
-process.on("SIGTERM", () => {
+// Once: a signal can arrive more than once, e.g. through both the process group and node --watch.
+process.once("SIGTERM", () => {
   log("info", "API stopping");
   server.close(() => {
     void Promise.allSettled([queue.close(), telemetry.shutdown()]).finally(() =>

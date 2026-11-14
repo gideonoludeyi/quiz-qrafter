@@ -4,7 +4,9 @@ import { describe, expect, it } from "vite-plus/test";
 import { loadConfig } from "../src/config";
 import { PermanentJobError } from "../src/providers/errors";
 import { RecitationError, streamText } from "../src/providers/gemini/client";
+import { salvageQuiz } from "../src/providers/gemini/quizGenerator";
 import { GeminiTextExtractor, filePartFor } from "../src/providers/gemini/textExtractor";
+import { withWideEvent } from "../src/observability/events";
 import { readLocally } from "../src/providers/localText";
 import { countQuestionsWritten } from "../src/providers/progress";
 import {
@@ -231,5 +233,51 @@ describe("GeminiTextExtractor", () => {
     await expect(extractor.extract(await pdfWith(PAPER), "application/pdf")).rejects.toThrow(
       "The AI declined to read this file.",
     );
+  });
+});
+
+describe("salvageQuiz", () => {
+  const question = { prompt: "Q", explanation: "", sourceQuote: null };
+  const choiceQuestion = (choices: string[], answerIndex: number) => ({
+    type: "multiple_choice",
+    ...question,
+    choices,
+    answerIndex,
+  });
+
+  it("removes blank choices and keeps the answer on the same choice", () => {
+    // Like a quiz Gemini returned: the second and fourth choices empty, the answer last.
+    const quiz = salvageQuiz({
+      title: "Cells",
+      questions: [choiceQuestion(["ATP", "", "DNA", "  ", "Mitochondria"], 4)],
+    });
+    expect(quiz.questions).toEqual([choiceQuestion(["ATP", "DNA", "Mitochondria"], 2)]);
+  });
+
+  it("drops a question it can't repair, and records what it did", async () => {
+    const events = captureEvents();
+    const quiz = await withWideEvent("job.run", {}, async () =>
+      salvageQuiz({
+        title: "Cells",
+        questions: [
+          choiceQuestion(["", "DNA", "RNA"], 0), // The correct choice is the blank one.
+          { type: "true_false", ...question, answer: true },
+        ],
+      }),
+    );
+    events.stop();
+
+    expect(quiz.questions).toEqual([{ type: "true_false", ...question, answer: true }]);
+    expect(events.lines[0]).toMatchObject({
+      "app.generate_quiz.blank_choices_removed": 1,
+      "app.generate_quiz.questions_dropped": 1,
+    });
+  });
+
+  it("fails, so the Run is retried, when no question is usable", () => {
+    expect(() => salvageQuiz({ title: "Cells", questions: [choiceQuestion(["", ""], 0)] })).toThrow(
+      "The model returned an invalid quiz: no usable questions",
+    );
+    expect(() => salvageQuiz({ questions: [] })).toThrow("The model returned an invalid quiz");
   });
 });

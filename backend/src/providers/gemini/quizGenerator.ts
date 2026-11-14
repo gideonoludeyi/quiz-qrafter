@@ -1,5 +1,11 @@
 import type { GoogleGenAI } from "@google/genai";
-import { type QuizDraft, QuizDraftSchema } from "@quizqrafter/shared";
+import {
+  type Question,
+  QuestionSchema,
+  type QuizDraft,
+  QuizDraftSchema,
+} from "@quizqrafter/shared";
+import { annotate } from "../../observability/events";
 import { countQuestionsWritten } from "../progress";
 import type { QuizGenerator } from "../types";
 import { streamText } from "./client";
@@ -11,8 +17,7 @@ const sharedFields = {
 };
 const sharedRequired = ["type", "prompt", "explanation", "sourceQuote"];
 
-// The JSON shape Gemini must return. Written by hand with the keywords Google documents
-// as supported (enum, anyOf, minItems, type arrays); QuizDraftSchema re-checks the result.
+// The JSON shape Gemini must return, using only keywords Gemini enforces; string lengths aren't, so salvageQuiz checks them.
 export const QUIZ_JSON_SCHEMA = {
   type: "object",
   properties: {
@@ -26,7 +31,12 @@ export const QUIZ_JSON_SCHEMA = {
             properties: {
               type: { type: "string", enum: ["multiple_choice"] },
               ...sharedFields,
-              choices: { type: "array", items: { type: "string" }, minItems: 2, maxItems: 6 },
+              choices: {
+                type: "array",
+                items: { type: "string", description: "A possible answer. Never empty." },
+                minItems: 2,
+                maxItems: 6,
+              },
               answerIndex: { type: "integer", minimum: 0, maximum: 5 },
             },
             required: [...sharedRequired, "choices", "answerIndex"],
@@ -65,7 +75,7 @@ Write 10 questions that mix multiple choice, true/false and short answer. If the
 The student will be graded against these notes, so every question and answer must come from what the notes state. Keep names, numbers and terms exactly as the notes give them, and leave out facts the notes do not contain, even when you know them.
 
 For each question:
-- Multiple choice questions have 4 choices and exactly one correct choice. "answerIndex" is the zero-based position of the correct choice.
+- Multiple choice questions have 4 choices and exactly one correct choice. Every choice is a written-out answer; none is empty. "answerIndex" is the zero-based position of the correct choice.
 - "explanation" says in one sentence why the answer is correct.
 - "sourceQuote" is the sentence from the notes that supports the answer, copied word for word. Use null when no single sentence supports it.
 
@@ -109,12 +119,50 @@ export class GeminiQuizGenerator implements QuizGenerator {
       },
     );
 
-    // Invalid JSON or a bad answerIndex is rare and usually fixed by a fresh attempt,
-    // so these are left as ordinary (retried) errors.
-    const parsed = QuizDraftSchema.safeParse(JSON.parse(json));
-    if (!parsed.success) {
-      throw new Error(`The model returned an invalid quiz: ${parsed.error.message}`);
-    }
-    return parsed.data;
+    // Invalid JSON, or a quiz with no usable question, is usually fixed by a fresh attempt.
+    return salvageQuiz(JSON.parse(json));
   }
+}
+
+// Repairs what Gemini's schema can't enforce: drops blank choices, then any question still invalid.
+export function salvageQuiz(raw: unknown): QuizDraft {
+  const { title, questions } = raw as { title?: unknown; questions?: unknown };
+  const candidates = Array.isArray(questions) ? questions : [];
+  let blankChoices = 0;
+  const kept: Question[] = [];
+  for (const candidate of candidates) {
+    const repaired = withoutBlankChoices(candidate);
+    blankChoices += repaired.removed;
+    const parsed = QuestionSchema.safeParse(repaired.question);
+    if (parsed.success) kept.push(parsed.data);
+  }
+  annotate({
+    "app.generate_quiz.blank_choices_removed": blankChoices,
+    "app.generate_quiz.questions_dropped": candidates.length - kept.length,
+  });
+
+  const parsed = QuizDraftSchema.safeParse({ title, questions: kept });
+  if (!parsed.success || kept.length === 0) {
+    const problem = parsed.success ? "no usable questions" : parsed.error.message;
+    throw new Error(`The model returned an invalid quiz: ${problem}`);
+  }
+  return parsed.data;
+}
+
+// Removes blank choices from a multiple choice question, keeping answerIndex on the same choice.
+function withoutBlankChoices(question: unknown): { question: unknown; removed: number } {
+  const q = question as { type?: unknown; choices?: unknown; answerIndex?: unknown };
+  if (q?.type !== "multiple_choice" || !Array.isArray(q.choices)) return { question, removed: 0 };
+  const filled = q.choices
+    .map((choice: unknown, index) => ({ choice, index }))
+    .filter(({ choice }) => typeof choice !== "string" || choice.trim() !== "");
+  return {
+    question: {
+      ...q,
+      choices: filled.map(({ choice }) => choice),
+      // -1 when the correct choice was the blank one, which makes the question invalid.
+      answerIndex: filled.findIndex(({ index }) => index === q.answerIndex),
+    },
+    removed: q.choices.length - filled.length,
+  };
 }

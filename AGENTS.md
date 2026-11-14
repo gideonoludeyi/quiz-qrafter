@@ -42,7 +42,7 @@ Architecture decisions and the reasons for them are recorded in `docs/adr/`. Rea
 
 ## Running locally
 
-`docker compose up -d` starts Postgres, and the Grafana LGTM stack (Grafana on 3001, OLTP on 4318). Wide events can be searched in Tempo (e.g., `{ span.app.job.id = 44 }`)
+`docker compose up -d` starts Postgres, and the Grafana LGTM stack (Grafana on 3001, OTLP on 4318). Wide events can be searched in Tempo (e.g., `{ span.app.job.id = 44 }`)
 `backend/.env.example` documents every setting. Use `STORAGE=local` and `AI=fake` to work with no cloud accounts.
 
 - `vp run dev`: API on 8080, one quiz worker on 8081, frontend on 3000. All three reload on change.

@@ -38,7 +38,8 @@ const server = serve({ fetch: health.fetch, port: config.worker.port }, () => {
   });
 });
 
-process.on("SIGTERM", () => {
+// Once: a signal can arrive more than once, e.g. through both the process group and node --watch.
+process.once("SIGTERM", () => {
   log("info", "Quiz worker stopping");
   server.close();
   void worker

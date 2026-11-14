@@ -29,6 +29,9 @@ export type EventFields = {
 
   "app.generate_quiz.stage"?: string;
   "app.generate_quiz.questions_written"?: number;
+  // Defects in the model's quiz that were repaired, or whose questions were dropped.
+  "app.generate_quiz.blank_choices_removed"?: number;
+  "app.generate_quiz.questions_dropped"?: number;
 
   "app.ai.finish_reason"?: string;
 
