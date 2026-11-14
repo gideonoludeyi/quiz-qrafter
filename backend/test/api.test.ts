@@ -292,8 +292,9 @@ describe("quiz API", () => {
 
     const markdown = await alice.get(`/api/v1/quiz/${quiz.id}/export?format=markdown`).expect(200);
     expect(markdown.text).toContain("# Cell biology");
-    expect(markdown.text).toContain("## Answer Key");
-    expect(markdown.text).toContain("2. B. Mitochondria");
+    expect(markdown.text).toContain(`## ${t("export.answerKey")}`);
+    const mitochondria = t("export.choice", { letter: "B", choice: "Mitochondria" });
+    expect(markdown.text).toContain(t("export.answer", { number: 2, answer: mitochondria }));
   });
 
   it("refuses uploads and new quizzes over the in-progress limit with 429", async () => {

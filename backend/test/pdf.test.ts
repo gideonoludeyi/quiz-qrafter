@@ -2,6 +2,7 @@ import type { QuizDraft } from "@quizqrafter/shared";
 import { extractText, getDocumentProxy } from "unpdf";
 import { describe, expect, it } from "vite-plus/test";
 import { renderQuizPdf } from "../src/core/pdf";
+import { t } from "../src/i18n";
 
 // Text a quiz from technical notes can contain: Greek letters, subscripts, math symbols, accents.
 const UNICODE_QUIZ: QuizDraft = {
@@ -44,7 +45,7 @@ describe("renderQuizPdf", () => {
   it("puts the questions first and the answer key on its own page", async () => {
     const pdf = await getDocumentProxy(new Uint8Array(await renderQuizPdf(UNICODE_QUIZ)));
     const { text: pages } = await extractText(pdf);
-    expect(pages.at(-1)).toContain("Answer Key");
-    expect(pages[0]).not.toContain("Answer Key");
+    expect(pages.at(-1)).toContain(t("export.answerKey"));
+    expect(pages[0]).not.toContain(t("export.answerKey"));
   });
 });

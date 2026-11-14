@@ -195,6 +195,29 @@ jobs:
     writingProgress_one: "Writing questions: {{count}} written so far"
     writingProgress_other: "Writing questions: {{count}} written so far"
 
+email:
+  passwordReset:
+    subject: Reset your Quiz Qrafter password
+    greeting: Hi {{name}},
+    intro: "Someone asked to reset the password for your Quiz Qrafter account. To choose a new one, use this link:"
+    # The HTML email's button.
+    button: Reset password
+    expiry: This link expires in 1 hour. If you didn't ask for this, ignore this email. Your password won't change.
+
+# The quiz as a downloaded PDF or markdown file.
+export:
+  # number counts questions from 1.
+  question: "{{number}}. {{prompt}}"
+  # letter is A, B, C… for each choice of a multiple choice question.
+  choice: "{{letter}}. {{choice}}"
+  # Printed under a true/false question, for the student to circle one.
+  trueOrFalse: True    /    False
+  # Printed under a short answer question, for the student to write on.
+  answerLine: "Answer: ______________________________________________"
+  answerKey: Answer Key
+  answer: "{{number}}. {{answer}}"
+  answerWithExplanation: "{{number}}. {{answer}} — {{explanation}}"
+
 errors:
   # The browser couldn't reach the API at all.
   network: Couldn't reach the server. Check your connection.

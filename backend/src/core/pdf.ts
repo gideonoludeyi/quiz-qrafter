@@ -1,6 +1,7 @@
 import { formatAnswer, type QuizDraft } from "@quizqrafter/shared";
 import { createRequire } from "node:module";
 import PDFDocument from "pdfkit";
+import { t } from "../i18n";
 
 const LETTERS = "ABCDEF";
 
@@ -28,28 +29,28 @@ export function renderQuizPdf(quiz: QuizDraft): Promise<Buffer> {
       doc
         .font("Bold")
         .fontSize(12)
-        .text(`${index + 1}. ${question.prompt}`);
+        .text(t("export.question", { number: index + 1, prompt: question.prompt }));
       doc.font("Regular").moveDown(0.3);
       if (question.type === "multiple_choice") {
         question.choices.forEach((choice, i) => {
-          doc.text(`${LETTERS[i]}. ${choice}`, { indent: 18 });
+          doc.text(t("export.choice", { letter: LETTERS[i], choice }), { indent: 18 });
         });
       } else if (question.type === "true_false") {
-        doc.text("True    /    False", { indent: 18 });
+        doc.text(t("export.trueOrFalse"), { indent: 18 });
       } else {
-        doc.text("Answer: ______________________________________________", { indent: 18 });
+        doc.text(t("export.answerLine"), { indent: 18 });
       }
       doc.moveDown();
     });
 
     doc.addPage();
-    doc.font("Bold").fontSize(16).text("Answer Key");
+    doc.font("Bold").fontSize(16).text(t("export.answerKey"));
     doc.moveDown();
     quiz.questions.forEach((question, index) => {
       doc
         .font("Bold")
         .fontSize(12)
-        .text(`${index + 1}. ${formatAnswer(question)}`);
+        .text(t("export.answer", { number: index + 1, answer: formatAnswer(question, t) }));
       if (question.explanation) {
         doc.font("Regular").text(question.explanation, { indent: 18 });
       }

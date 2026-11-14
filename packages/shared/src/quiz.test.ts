@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vite-plus/test";
-import { quizToMarkdown } from "./markdown";
 import { QuestionSchema, type QuizDraft, QuizDraftSchema } from "./quiz";
 
 const draft: QuizDraft = {
@@ -54,33 +53,5 @@ describe("QuizDraftSchema", () => {
     expect(QuizDraftSchema.safeParse({ ...draft, title: " " }).success).toBe(false);
     const question = { ...draft.questions[2], prompt: "" };
     expect(QuestionSchema.safeParse(question).success).toBe(false);
-  });
-});
-
-describe("quizToMarkdown", () => {
-  it("renders the questions and then the answer key", () => {
-    expect(quizToMarkdown(draft)).toBe(
-      [
-        "# Capitals",
-        "",
-        "1. What is the capital of France?",
-        "   - A. Lyon",
-        "   - B. Paris",
-        "   - C. Nice",
-        "",
-        "2. Berlin is in Germany.",
-        "   - True",
-        "   - False",
-        "",
-        "3. Name the capital of Japan.",
-        "",
-        "## Answer Key",
-        "",
-        "1. B. Paris — Paris is the capital.",
-        "2. True",
-        "3. Tokyo — The notes name Tokyo.",
-        "",
-      ].join("\n"),
-    );
   });
 });

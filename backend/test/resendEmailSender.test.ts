@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vite-plus/test";
+import { t } from "../src/i18n";
 import { type ResendClient, ResendEmailSender } from "../src/providers/email/resendEmailSender";
 
 const FROM = "Quiz Qrafter <onboarding@resend.dev>";
@@ -27,11 +28,12 @@ describe("ResendEmailSender", () => {
     expect(message).toMatchObject({
       from: FROM,
       to: "ada@example.com",
-      subject: "Reset your Quiz Qrafter password",
+      subject: t("email.passwordReset.subject"),
     });
     // The HTML escapes "&" in the URL; the text has it as-is.
     expect(message.html).toContain(URL.replaceAll("&", "&amp;"));
-    expect(message.html).toContain("Hi Ada,");
+    expect(message.html).toContain(t("email.passwordReset.greeting", { name: "Ada" }));
+    expect(message.text).toContain(t("email.passwordReset.greeting", { name: "Ada" }));
     expect(message.text).toContain(URL);
   });
 

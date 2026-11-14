@@ -101,3 +101,7 @@ Drop this workaround once Vite+ ships [PR #3317](https://github.com/voidzero-dev
 ## Observability
 
 Each API request and each Run of a Job emits one wide event: a JSON line on stdout (compact in development) that is also an OpenTelemetry span. Record facts about the work as fields on the current event, never as separate log lines. Field names are defined in one place, OpenTelemetry's where they exist and `app.*` with glossary terms otherwise. Events carry ids, never emails, filenames, document text, tokens, or other sensitive personally identifiable information (SPII). Redaction enforces this, and tests check it.
+
+## User-facing Texts
+
+All user-facing texts (UI labels, error messages, etc.) are externalized in `packages/shared/locales/en.yml`, and translated to English text using the i18next translation API. Server errors carry codes rather than English sentences.
