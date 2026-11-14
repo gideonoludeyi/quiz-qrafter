@@ -1,6 +1,9 @@
+import path from "node:path";
+import type { GoogleGenAI } from "@google/genai";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { loadConfig } from "../src/config";
 import { PermanentJobError } from "../src/providers/errors";
+import { streamText } from "../src/providers/gemini/client";
 import { filePartFor } from "../src/providers/gemini/textExtractor";
 import { readLocally } from "../src/providers/localText";
 import { countQuestionsWritten } from "../src/providers/progress";
@@ -114,9 +117,56 @@ describe("loadConfig", () => {
     warn.mockRestore();
   });
 
+  it("keeps local files under backend/, wherever the process was started", () => {
+    const backendDir = path.resolve(import.meta.dirname, "..");
+    expect(loadConfig({ ...local, AI: "fake" }).localDataDir).toBe(path.join(backendDir, ".data"));
+    expect(loadConfig({ ...local, AI: "fake", LOCAL_DATA_DIR: "/srv/qq" }).localDataDir).toBe(
+      "/srv/qq",
+    );
+  });
+
   it("defaults to gemini-4-hydrogen", () => {
     expect(loadConfig({ ...local, AI: "gemini", GEMINI_API_KEY: "k" }).gemini.model).toBe(
       "gemini-4-hydrogen",
     );
+  });
+});
+
+describe("streamText", () => {
+  // A Gemini client whose stream yields `chunks`.
+  const geminiStreaming = (...chunks: object[]) =>
+    ({
+      models: {
+        generateContentStream: async () =>
+          (async function* () {
+            yield* chunks;
+          })(),
+      },
+    }) as unknown as GoogleGenAI;
+  const outcome = { task: "read this file", tooLong: "Too long." };
+
+  it("shows the user a plain refusal and keeps Gemini's reason for the logs", async () => {
+    const ai = geminiStreaming(
+      { text: "Chapter 1" },
+      {
+        candidates: [
+          {
+            finishReason: "RECITATION",
+            safetyRatings: [{ category: "HARM_CATEGORY_HARASSMENT", probability: "NEGLIGIBLE" }],
+          },
+        ],
+      },
+    );
+    const error = await streamText(ai, { model: "m", contents: [] }, outcome).catch((e) => e);
+    expect(error).toBeInstanceOf(PermanentJobError);
+    expect(error.message).toBe("The AI declined to read this file.");
+    expect(error.cause.message).toMatch(/finished with RECITATION; safety ratings: .*HARASSMENT/);
+  });
+
+  it("keeps the reason when Gemini blocks the prompt", async () => {
+    const ai = geminiStreaming({ promptFeedback: { blockReason: "OTHER" } });
+    const error = await streamText(ai, { model: "m", contents: [] }, outcome).catch((e) => e);
+    expect(error.message).toBe("The AI declined to read this file.");
+    expect(error.cause.message).toBe("Gemini prompt blocked: OTHER");
   });
 });

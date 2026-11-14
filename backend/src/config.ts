@@ -1,4 +1,8 @@
+import path from "node:path";
 import { z } from "zod";
+
+// backend/, from both src/ and the bundled dist/. Relative paths in settings start here.
+const BACKEND_DIR = path.resolve(import.meta.dirname, "..");
 
 // Treat empty strings (e.g. `LLM_MODEL=` in .env) as unset.
 function blankAsUnset<T extends z.ZodType>(schema: T) {
@@ -135,7 +139,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       schema: parsed.QUEUE_SCHEMA,
     },
     storage: parsed.STORAGE,
-    localDataDir: parsed.LOCAL_DATA_DIR,
+    localDataDir: path.resolve(BACKEND_DIR, parsed.LOCAL_DATA_DIR),
     gcs: {
       credentialsFile: parsed.GOOGLE_APPLICATION_CREDENTIALS,
       documentsBucket: parsed.DOCUMENTS_BUCKET,

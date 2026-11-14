@@ -4,6 +4,7 @@ import {
   type GenerateContentParameters,
   type GenerateContentResponse,
   GoogleGenAI,
+  type SafetyRating,
 } from "@google/genai";
 import { PermanentJobError } from "../errors";
 
@@ -31,6 +32,14 @@ export function classifyGeminiError(error: unknown): unknown {
   return error;
 }
 
+// A refusal shown to the user plainly; the cause records Gemini's reason, for the logs.
+function declined(task: string, reason: string, safetyRatings?: SafetyRating[]) {
+  const ratings = safetyRatings?.length ? `; safety ratings: ${JSON.stringify(safetyRatings)}` : "";
+  return new PermanentJobError(`The AI declined to ${task}.`, {
+    cause: new Error(`Gemini ${reason}${ratings}`),
+  });
+}
+
 type Outcome = { task: string; tooLong: string };
 
 // Streams a response, calling `onText` with the text so far, and returns the full text.
@@ -46,8 +55,9 @@ export async function streamText(
   try {
     for await (const chunk of await ai.models.generateContentStream(params)) {
       last = chunk;
-      if (chunk.promptFeedback?.blockReason) {
-        throw new PermanentJobError(`The AI declined to ${task}.`);
+      const feedback = chunk.promptFeedback;
+      if (feedback?.blockReason) {
+        throw declined(task, `prompt blocked: ${feedback.blockReason}`, feedback.safetyRatings);
       }
       const piece = chunk.text;
       if (piece) {
@@ -59,8 +69,11 @@ export async function streamText(
     throw classifyGeminiError(error);
   }
 
-  const finishReason = last?.candidates?.[0]?.finishReason;
-  if (DECLINED.has(finishReason)) throw new PermanentJobError(`The AI declined to ${task}.`);
+  const candidate = last?.candidates?.[0];
+  const finishReason = candidate?.finishReason;
+  if (DECLINED.has(finishReason)) {
+    throw declined(task, `finished with ${finishReason}`, candidate?.safetyRatings);
+  }
   if (finishReason === FinishReason.MAX_TOKENS) throw new PermanentJobError(tooLong);
   return text;
 }
