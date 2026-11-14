@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { t } from "@/i18n";
 import { useAuth } from "../../services/auth";
 import AuthLayout from "./AuthLayout";
 
@@ -36,13 +37,13 @@ const Login = () => {
     const newError: Record<string, string> = {};
 
     if (!email.trim()) {
-      newError.email = "*Email is required*";
+      newError.email = t("auth.validation.emailRequired");
     } else if (!checkEmail(email)) {
-      newError.email = "*Email address should contain '@'*";
+      newError.email = t("auth.validation.emailInvalid");
     }
 
     if (!checkPwd(password)) {
-      newError.password = "*Password should have at least 8 characters and one upper case letter*";
+      newError.password = t("auth.validation.passwordWeak");
     }
 
     setError(newError);
@@ -69,37 +70,40 @@ const Login = () => {
         setValidation(true);
         setError({});
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not log in.");
+        toast.error(error instanceof Error ? error.message : t("auth.errors.logInFailed"));
       }
     }
   };
 
   return (
     <AuthLayout
-      title="Welcome back"
+      title={t("auth.logInPage.title")}
       footer={
         <>
-          Don't have an account?
+          {t("auth.logInPage.noAccount")}
           <Button
             variant="link"
             className="px-1"
             nativeButton={false}
             render={<Link to="/signup" />}
           >
-            Sign up
+            {t("auth.signUp")}
           </Button>
         </>
       }
-      finePrint="By signing up, you agree to Quiz Qrafter's Terms of Use and Privacy Policy."
+      finePrint={t("auth.finePrint", {
+        terms: t("auth.termsOfUse"),
+        privacy: t("auth.privacyPolicy"),
+      })}
     >
       <form onSubmit={handleLogin}>
         <FieldGroup>
           <Field data-invalid={!!error.email}>
-            <FieldLabel htmlFor="email">Email</FieldLabel>
+            <FieldLabel htmlFor="email">{t("auth.email")}</FieldLabel>
             <Input
               id="email"
               type="email"
-              placeholder="you@example.com"
+              placeholder={t("auth.logInPage.emailPlaceholder")}
               aria-invalid={!!error.email}
               onChange={(event) => handleEmail(event.target.value)}
             />
@@ -107,7 +111,7 @@ const Login = () => {
           </Field>
           <Field data-invalid={!!error.password}>
             <div className="flex items-center">
-              <FieldLabel htmlFor="password">Password</FieldLabel>
+              <FieldLabel htmlFor="password">{t("auth.password")}</FieldLabel>
               <Button
                 variant="link"
                 size="xs"
@@ -115,7 +119,7 @@ const Login = () => {
                 nativeButton={false}
                 render={<Link to="/forgot-password" />}
               >
-                Forgot password?
+                {t("auth.logInPage.forgotPassword")}
               </Button>
             </div>
             <Input
@@ -127,7 +131,7 @@ const Login = () => {
             <FieldError>{error.password}</FieldError>
           </Field>
           <Button type="submit" className="w-full" disabled={!isValid}>
-            Log in
+            {t("auth.logIn")}
           </Button>
         </FieldGroup>
       </form>

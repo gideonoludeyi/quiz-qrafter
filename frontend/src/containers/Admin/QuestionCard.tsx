@@ -1,4 +1,4 @@
-import type { Question, QuestionType } from "@quizqrafter/shared";
+import { type Question, QUESTION_TYPES, type QuestionType } from "@quizqrafter/shared";
 import { RiAddLine, RiCloseLine, RiDeleteBinLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,12 +6,18 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
+import { t } from "@/i18n";
 
-const TYPE_LABELS: Record<QuestionType, string> = {
-  multiple_choice: "Multiple choice",
-  true_false: "True / False",
-  short_answer: "Short answer",
-};
+function typeLabel(type: QuestionType): string {
+  switch (type) {
+    case "multiple_choice":
+      return t("quiz.editor.type.multipleChoice");
+    case "true_false":
+      return t("quiz.editor.type.trueFalse");
+    case "short_answer":
+      return t("quiz.editor.type.shortAnswer");
+  }
+}
 
 const MIN_CHOICES = 2;
 const MAX_CHOICES = 6;
@@ -49,12 +55,12 @@ const QuestionCard = ({ index, question, onChange, onDelete }: QuestionCardProps
   return (
     <Card data-testid={`question-${number}`}>
       <CardHeader>
-        <CardTitle>Question {number}</CardTitle>
+        <CardTitle>{t("quiz.editor.question", { number })}</CardTitle>
         <CardAction>
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label={`Delete question ${number}`}
+            aria-label={t("quiz.editor.deleteQuestion", { number })}
             onClick={onDelete}
           >
             <RiDeleteBinLine />
@@ -63,8 +69,12 @@ const QuestionCard = ({ index, question, onChange, onDelete }: QuestionCardProps
       </CardHeader>
       <CardContent>
         <FieldGroup>
-          <div role="group" aria-label={`Question ${number} type`} className="flex flex-wrap gap-1">
-            {(Object.keys(TYPE_LABELS) as QuestionType[]).map((type) => (
+          <div
+            role="group"
+            aria-label={t("quiz.editor.typeGroup", { number })}
+            className="flex flex-wrap gap-1"
+          >
+            {QUESTION_TYPES.map((type) => (
               <Button
                 key={type}
                 size="sm"
@@ -72,13 +82,13 @@ const QuestionCard = ({ index, question, onChange, onDelete }: QuestionCardProps
                 aria-pressed={question.type === type}
                 onClick={() => question.type !== type && onChange(withType(question, type))}
               >
-                {TYPE_LABELS[type]}
+                {typeLabel(type)}
               </Button>
             ))}
           </div>
 
           <Field>
-            <FieldLabel htmlFor={id("prompt")}>Question</FieldLabel>
+            <FieldLabel htmlFor={id("prompt")}>{t("quiz.editor.prompt")}</FieldLabel>
             <Textarea
               id={id("prompt")}
               value={question.prompt}
@@ -88,9 +98,9 @@ const QuestionCard = ({ index, question, onChange, onDelete }: QuestionCardProps
 
           {question.type === "multiple_choice" && (
             <Field>
-              <FieldLabel>Choices (select the correct one)</FieldLabel>
+              <FieldLabel>{t("quiz.editor.choices")}</FieldLabel>
               <RadioGroup
-                aria-label={`Correct choice for question ${number}`}
+                aria-label={t("quiz.editor.correctChoiceGroup", { number })}
                 value={String(question.answerIndex)}
                 onValueChange={(value) => onChange({ ...question, answerIndex: Number(value) })}
               >
@@ -98,10 +108,10 @@ const QuestionCard = ({ index, question, onChange, onDelete }: QuestionCardProps
                   <div key={i} className="flex items-center gap-2">
                     <RadioGroupItem
                       value={String(i)}
-                      aria-label={`Mark choice ${i + 1} as correct`}
+                      aria-label={t("quiz.editor.markCorrect", { number: i + 1 })}
                     />
                     <Input
-                      aria-label={`Choice ${i + 1}`}
+                      aria-label={t("quiz.editor.choice", { number: i + 1 })}
                       value={choice}
                       onChange={(event) =>
                         onChange({
@@ -115,7 +125,7 @@ const QuestionCard = ({ index, question, onChange, onDelete }: QuestionCardProps
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      aria-label={`Remove choice ${i + 1}`}
+                      aria-label={t("quiz.editor.removeChoice", { number: i + 1 })}
                       disabled={question.choices.length <= MIN_CHOICES}
                       onClick={() => {
                         const { answerIndex } = question;
@@ -141,7 +151,7 @@ const QuestionCard = ({ index, question, onChange, onDelete }: QuestionCardProps
                   onClick={() => onChange({ ...question, choices: [...question.choices, ""] })}
                 >
                   <RiAddLine data-icon="inline-start" />
-                  Add choice
+                  {t("quiz.editor.addChoice")}
                 </Button>
               </div>
             </Field>
@@ -149,8 +159,12 @@ const QuestionCard = ({ index, question, onChange, onDelete }: QuestionCardProps
 
           {question.type === "true_false" && (
             <Field>
-              <FieldLabel>Correct answer</FieldLabel>
-              <div role="group" aria-label={`Answer for question ${number}`} className="flex gap-1">
+              <FieldLabel>{t("quiz.editor.correctAnswer")}</FieldLabel>
+              <div
+                role="group"
+                aria-label={t("quiz.editor.answerGroup", { number })}
+                className="flex gap-1"
+              >
                 {[true, false].map((value) => (
                   <Button
                     key={String(value)}
@@ -159,7 +173,7 @@ const QuestionCard = ({ index, question, onChange, onDelete }: QuestionCardProps
                     aria-pressed={question.answer === value}
                     onClick={() => onChange({ ...question, answer: value })}
                   >
-                    {value ? "True" : "False"}
+                    {value ? t("quiz.trueAnswer") : t("quiz.falseAnswer")}
                   </Button>
                 ))}
               </div>
@@ -168,7 +182,7 @@ const QuestionCard = ({ index, question, onChange, onDelete }: QuestionCardProps
 
           {question.type === "short_answer" && (
             <Field>
-              <FieldLabel htmlFor={id("answer")}>Correct answer</FieldLabel>
+              <FieldLabel htmlFor={id("answer")}>{t("quiz.editor.correctAnswer")}</FieldLabel>
               <Input
                 id={id("answer")}
                 value={question.answer}
@@ -178,7 +192,7 @@ const QuestionCard = ({ index, question, onChange, onDelete }: QuestionCardProps
           )}
 
           <Field>
-            <FieldLabel htmlFor={id("explanation")}>Explanation (optional)</FieldLabel>
+            <FieldLabel htmlFor={id("explanation")}>{t("quiz.editor.explanation")}</FieldLabel>
             <Textarea
               id={id("explanation")}
               value={question.explanation}
@@ -188,7 +202,7 @@ const QuestionCard = ({ index, question, onChange, onDelete }: QuestionCardProps
 
           {question.sourceQuote && (
             <blockquote className="border-l-2 pl-3 text-sm text-muted-foreground">
-              From your notes: “{question.sourceQuote}”
+              {t("quiz.editor.sourceQuote", { quote: question.sourceQuote })}
             </blockquote>
           )}
         </FieldGroup>

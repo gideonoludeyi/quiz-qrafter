@@ -1,5 +1,6 @@
 import type { Quiz, QuizDraft } from "@quizqrafter/shared";
 import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { t } from "@/i18n";
 import { useAuth } from "../auth";
 import { describeRequestError, downloadBlob, type RequestResult } from "../http";
 import type { QuizService } from "./types";
@@ -57,14 +58,13 @@ export function QuizProvider({ service, children }: QuizProviderProps) {
   );
 
   const load = useCallback(
-    (quizId: number) => run(() => service.get(quizId), setQuiz, "The quiz couldn't be loaded."),
+    (quizId: number) => run(() => service.get(quizId), setQuiz, t("quiz.loadFailed")),
     [run, service],
   );
 
   const save = useCallback(
     async (draft: QuizDraft) =>
-      quiz !== null &&
-      run(() => service.update(quiz.id, draft), setQuiz, "The quiz couldn't be saved."),
+      quiz !== null && run(() => service.update(quiz.id, draft), setQuiz, t("quiz.saveFailed")),
     [run, service, quiz],
   );
 
@@ -74,7 +74,7 @@ export function QuizProvider({ service, children }: QuizProviderProps) {
       run(
         () => service.exportPdf(quiz.id),
         (pdf) => downloadBlob(pdf, "quiz.pdf"),
-        "The PDF couldn't be downloaded.",
+        t("quiz.pdfFailed"),
       ),
     [run, service, quiz],
   );

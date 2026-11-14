@@ -4,6 +4,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { useTheme } from "@/containers/Admin/ThemeContext";
 import LogoDark from "@/assets/quiz_qrafter_logo_dark.svg";
 import LogoLight from "@/assets/quiz_qrafter_logo_light.svg";
+import { t } from "@/i18n";
 
 // Shared shell for auth pages: logo header, centered card, optional footer and fine print.
 const AuthLayout = ({
@@ -25,7 +26,7 @@ const AuthLayout = ({
         <Link to="/">
           <img
             src={theme === "dark" ? LogoLight : LogoDark}
-            alt="Quiz Qrafter"
+            alt={t("common.appName")}
             className="h-8 w-auto"
           />
         </Link>

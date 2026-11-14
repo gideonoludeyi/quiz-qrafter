@@ -3,7 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import RichText from "@/components/RichText";
 import { Input } from "@/components/ui/input";
+import { t } from "@/i18n";
 import { useAuth } from "../../services/auth";
 import AuthLayout from "./AuthLayout";
 
@@ -36,21 +38,21 @@ const SignUp = () => {
     const newError: Record<string, string> = {};
 
     if (!firstname) {
-      newError.firstname = "*First name is required*";
+      newError.firstname = t("auth.validation.firstNameRequired");
     }
 
     if (!lastname) {
-      newError.lastname = "*Last name is required*";
+      newError.lastname = t("auth.validation.lastNameRequired");
     }
 
     if (!email.trim()) {
-      newError.email = "*Email is required*";
+      newError.email = t("auth.validation.emailRequired");
     } else if (!checkEmail(email)) {
-      newError.email = "*Email address should contain '@'*";
+      newError.email = t("auth.validation.emailInvalid");
     }
 
     if (!checkPwd(password)) {
-      newError.password = "*Password should have at least 8 characters and one upper case letter*";
+      newError.password = t("auth.validation.passwordWeak");
     }
 
     setError(newError);
@@ -90,45 +92,49 @@ const SignUp = () => {
         navigate("/dashboard", { replace: true });
         setError({});
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not sign up.");
+        toast.error(error instanceof Error ? error.message : t("auth.errors.signUpFailed"));
       }
     }
   };
 
   return (
     <AuthLayout
-      title="Get started with Quiz Qrafter"
+      title={t("auth.signUpPage.title")}
       footer={
         <>
-          Already have an account?
+          {t("auth.signUpPage.haveAccount")}
           <Button
             variant="link"
             className="px-1"
             nativeButton={false}
             render={<Link to="/login" />}
           >
-            Log in
+            {t("auth.logIn")}
           </Button>
         </>
       }
       finePrint={
-        <>
-          By signing up, you agree to Quiz Qrafter's{" "}
-          <Link to="/terms" className="underline underline-offset-4 hover:text-foreground">
-            Terms of Use
-          </Link>{" "}
-          and{" "}
-          <Link to="/privacy" className="underline underline-offset-4 hover:text-foreground">
-            Privacy Policy
-          </Link>
-          .
-        </>
+        <RichText
+          id="auth.finePrint"
+          parts={{
+            terms: (
+              <Link to="/terms" className="underline underline-offset-4 hover:text-foreground">
+                {t("auth.termsOfUse")}
+              </Link>
+            ),
+            privacy: (
+              <Link to="/privacy" className="underline underline-offset-4 hover:text-foreground">
+                {t("auth.privacyPolicy")}
+              </Link>
+            ),
+          }}
+        />
       }
     >
       <form onSubmit={handleSignUp}>
         <FieldGroup>
           <Field data-invalid={!!error.firstname}>
-            <FieldLabel htmlFor="firstname">First name</FieldLabel>
+            <FieldLabel htmlFor="firstname">{t("auth.signUpPage.firstName")}</FieldLabel>
             <Input
               id="firstname"
               type="text"
@@ -139,7 +145,7 @@ const SignUp = () => {
             <FieldError>{error.firstname}</FieldError>
           </Field>
           <Field data-invalid={!!error.lastname}>
-            <FieldLabel htmlFor="lastname">Last name</FieldLabel>
+            <FieldLabel htmlFor="lastname">{t("auth.signUpPage.lastName")}</FieldLabel>
             <Input
               id="lastname"
               type="text"
@@ -150,7 +156,7 @@ const SignUp = () => {
             <FieldError>{error.lastname}</FieldError>
           </Field>
           <Field data-invalid={!!error.email}>
-            <FieldLabel htmlFor="email">Email</FieldLabel>
+            <FieldLabel htmlFor="email">{t("auth.email")}</FieldLabel>
             <Input
               id="email"
               type="email"
@@ -161,7 +167,7 @@ const SignUp = () => {
             <FieldError>{error.email}</FieldError>
           </Field>
           <Field data-invalid={!!error.password}>
-            <FieldLabel htmlFor="password">Password</FieldLabel>
+            <FieldLabel htmlFor="password">{t("auth.password")}</FieldLabel>
             <Input
               id="password"
               type="password"
@@ -172,7 +178,7 @@ const SignUp = () => {
             <FieldError>{error.password}</FieldError>
           </Field>
           <Button type="submit" className="w-full" disabled={!isValid}>
-            Sign up
+            {t("auth.signUp")}
           </Button>
         </FieldGroup>
       </form>

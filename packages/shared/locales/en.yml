@@ -9,8 +9,195 @@
 common:
   appName: Quiz Qrafter
   loading: Loading…
+  close: Close
+  save: Save
+  retry: Retry
+  tryAgain: Try again
+  # The signed-in app's navigation, for screen readers.
+  mainNav: Main
+  theme:
+    switchToDark: Switch to dark theme
+    switchToLight: Switch to light theme
+
+auth:
+  email: Email
+  password: Password
+  logIn: Log in
+  logOut: Log out
+  signUp: Sign up
+  # Under the log-in and sign-up forms; terms and privacy are links on the sign-up page.
+  finePrint: "By signing up, you agree to Quiz Qrafter's {{terms}} and {{privacy}}."
+  termsOfUse: Terms of Use
+  privacyPolicy: Privacy Policy
+  # Shown under a form field as the user types.
+  validation:
+    emailRequired: "*Email is required*"
+    emailInvalid: "*Email address should contain '@'*"
+    passwordWeak: "*Password should have at least 8 characters and one upper case letter*"
+    passwordsDiffer: "*Passwords do not match*"
+    firstNameRequired: "*First name is required*"
+    lastNameRequired: "*Last name is required*"
+  logInPage:
+    title: Welcome back
+    noAccount: Don't have an account?
+    forgotPassword: Forgot password?
+    emailPlaceholder: you@example.com
+  signUpPage:
+    title: Get started with Quiz Qrafter
+    haveAccount: Already have an account?
+    firstName: First name
+    lastName: Last name
+  forgotPasswordPage:
+    title: Forgot Password
+    emailPlaceholder: Enter your email
+    submit: Send Reset Link
+    backToLogin: Back to login
+    # The same whether or not the email has an account, so it doesn't reveal which do.
+    sent: If an account exists for this email, a password reset link has been sent.
+    failed: There was an error processing your request. Please try again later.
+  updatePasswordPage:
+    title: Update Your Password
+    newPassword: New password
+    confirmPassword: Confirm new password
+    submit: Update Password
+    updated: Your password has been successfully updated.
+    failed: There was an error updating your password. Please try again.
+    linkInvalid: This password reset link is invalid or has expired.
+    requestNewLink: Request a new link
+  # What better-auth's error codes mean to the user, and a fallback for each action.
+  errors:
+    accountExists: An account with this email already exists. Log in, or use another email.
+    wrongCredentials: The email or password is incorrect.
+    invalidEmail: This email address isn't valid.
+    passwordTooShort: This password is too short.
+    passwordTooLong: This password is too long.
+    resetLinkInvalid: This password reset link is invalid or has expired.
+    tooManyAttempts: Too many attempts. Wait a moment and try again.
+    signUpFailed: Could not create the account.
+    logInFailed: Could not log in.
+    signOutFailed: Could not sign out.
+    resetRequestFailed: Could not send the reset link.
+    resetFailed: Could not update the password.
+
+documents:
+  title: Documents
+  # The list of the user's documents, for screen readers.
+  listLabel: Your documents
+  upload: Upload
+  # The file picker's label, for screen readers.
+  uploadLabel: Upload notes
+  # maxMb is the upload size limit in megabytes.
+  uploadHint: "Up to {{maxMb}} MB: PDF, image, Word, markdown or text"
+  uploaded: File uploaded. Writing your quiz…
+  uploadFailed: Failed to upload file.
+  loadingList: Loading documents
+  loadFailed: Your documents couldn't be loaded.
+  empty: Upload your notes to generate your first quiz.
+  noMatches: No documents match this filter.
+  back: Back to documents
+  closeDocument: Close document
+  tabs:
+    viewer: Viewer
+    quiz: Quiz
+  filter:
+    label: Filter
+    all: All
+  # Where a document's quiz stands; the list is grouped and filtered by these.
+  state:
+    inProgress: In progress
+    failed: Needs attention
+    ready: Ready
+    notStarted: No quiz yet
+  # The short status beside a document in the list.
+  summary:
+    ready: Quiz ready
+    failed: Failed
+    notStarted: No quiz
+    queued: Waiting…
+    reading: Reading…
+    writing: Writing…
+    writingProgress_one: Writing… {{count}} so far
+    writingProgress_other: Writing… {{count}} so far
+  kind:
+    pdf: PDF
+    image: Image
+    markdown: Markdown
+    text: Text
+    word: Word
+    other: File
+  viewer:
+    loading: Loading document
+    loadFailed: The document couldn't be loaded.
+    downloadFailed: The document couldn't be downloaded.
+    wordTextOnly: Text only; formatting isn't shown
+    openInNewTab: Open in a new tab
+    downloadOriginal: Download original
+    cantShow: This file can't be shown here. Download it to open it.
+    previewTitle: "{{filename}} preview"
+
+quiz:
+  generate: Generate quiz
+  none: There is no quiz for {{filename}} yet.
+  regenerate: Regenerate
+  confirmRegenerate: Regenerating replaces this quiz, including your edits. Continue?
+  downloadPdf: Download PDF
+  unsavedChanges: Unsaved changes
+  confirmDiscard: You have unsaved changes. Discard them?
+  ready: Your quiz is ready.
+  saved: Quiz saved.
+  saveFailed: The quiz couldn't be saved.
+  loadFailed: The quiz couldn't be loaded.
+  pdfFailed: The PDF couldn't be downloaded.
+  invalidField: The quiz has a field that is not valid.
+  trueAnswer: "True"
+  falseAnswer: "False"
+  editor:
+    title: Quiz title
+    addQuestion: Add question
+    # number counts questions and choices from 1.
+    question: Question {{number}}
+    deleteQuestion: Delete question {{number}}
+    typeGroup: Question {{number}} type
+    type:
+      multipleChoice: Multiple choice
+      trueFalse: True / False
+      shortAnswer: Short answer
+    prompt: Question
+    choices: Choices (select the correct one)
+    correctChoiceGroup: Correct choice for question {{number}}
+    markCorrect: Mark choice {{number}} as correct
+    choice: Choice {{number}}
+    removeChoice: Remove choice {{number}}
+    addChoice: Add choice
+    correctAnswer: Correct answer
+    answerGroup: Answer for question {{number}}
+    explanation: Explanation (optional)
+    sourceQuote: "From your notes: “{{quote}}”"
+  # Why a quiz can't be saved yet.
+  problems:
+    noTitle: The quiz needs a title.
+    noPrompt: Question {{number}} needs question text.
+    emptyChoice: Question {{number}} has an empty choice.
+    noAnswer: Question {{number}} needs a correct answer.
+
+jobs:
+  making: Making a quiz from {{filename}}
+  failed: The quiz for {{filename}} couldn't be made
+  takesAMinute: This usually takes under a minute. You can leave this page.
+  progressLabel: Quiz progress
+  startFailed: Could not start writing the quiz.
+  # What a GenerateQuizJob in progress is doing.
+  stage:
+    queued: Waiting to start…
+    starting: Starting…
+    reading: Reading your document…
+    writing: Writing questions…
+    writingProgress_one: "Writing questions: {{count}} written so far"
+    writingProgress_other: "Writing questions: {{count}} written so far"
 
 errors:
+  # The browser couldn't reach the API at all.
+  network: Couldn't reach the server. Check your connection.
   # Anything else the server failed with.
   server: Something went wrong on our side. Please try again.
   request:

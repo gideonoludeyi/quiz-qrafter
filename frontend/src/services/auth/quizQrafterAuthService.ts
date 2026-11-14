@@ -1,15 +1,36 @@
+import { t } from "@/i18n";
 import { type AuthClient, createQuizQrafterAuthClient } from "./authClient";
 import type { AuthService, LoginCredentials, SignUpInfo, User } from "./types";
 
-type ClientError = { message?: string; status: number } | null;
+type ClientError = { code?: string; message?: string; status: number } | null;
+
+// What better-auth's error codes mean to the user; its own messages are English and technical.
+const AUTH_ERRORS: Record<string, string> = {
+  USER_ALREADY_EXISTS: "auth.errors.accountExists",
+  USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL: "auth.errors.accountExists",
+  INVALID_EMAIL_OR_PASSWORD: "auth.errors.wrongCredentials",
+  INVALID_EMAIL: "auth.errors.invalidEmail",
+  PASSWORD_TOO_SHORT: "auth.errors.passwordTooShort",
+  PASSWORD_TOO_LONG: "auth.errors.passwordTooLong",
+  INVALID_TOKEN: "auth.errors.resetLinkInvalid",
+  TOKEN_EXPIRED: "auth.errors.resetLinkInvalid",
+};
+
+// The words for a better-auth error: by its code, as a rate limit, or else `fallback`.
+export function describeAuthError(error: NonNullable<ClientError>, fallback: string): string {
+  const key = error.code === undefined ? undefined : AUTH_ERRORS[error.code];
+  if (key !== undefined) return t(key);
+  if (error.status === 429) return t("auth.errors.tooManyAttempts");
+  return fallback;
+}
 
 function toUser(user: { email: string; name: string }): User {
   return { email: user.email, username: user.name };
 }
 
-// Throws better-auth's message (e.g. "User already exists") or the fallback.
+// Throws the error in words for the user, never better-auth's own message.
 function throwIfError(error: ClientError, fallback: string) {
-  if (error) throw new Error(error.message || `${fallback} (${error.status})`);
+  if (error) throw new Error(describeAuthError(error, fallback));
 }
 
 export class QuizQrafterAuthService implements AuthService {
@@ -30,28 +51,28 @@ export class QuizQrafterAuthService implements AuthService {
       email: info.email,
       password: info.password,
     });
-    throwIfError(error, "Could not create the account");
+    throwIfError(error, t("auth.errors.signUpFailed"));
     return toUser(data!.user);
   }
 
   async login(credentials: LoginCredentials): Promise<User> {
     const { data, error } = await this.client.signIn.email(credentials);
-    throwIfError(error, "Invalid email or password");
+    throwIfError(error, t("auth.errors.logInFailed"));
     return toUser(data!.user);
   }
 
   async signOut(): Promise<void> {
     const { error } = await this.client.signOut();
-    throwIfError(error, "Could not sign out");
+    throwIfError(error, t("auth.errors.signOutFailed"));
   }
 
   async requestPasswordReset(email: string, redirectTo: string): Promise<void> {
     const { error } = await this.client.requestPasswordReset({ email, redirectTo });
-    throwIfError(error, "Could not send the reset link");
+    throwIfError(error, t("auth.errors.resetRequestFailed"));
   }
 
   async resetPassword(token: string, newPassword: string): Promise<void> {
     const { error } = await this.client.resetPassword({ token, newPassword });
-    throwIfError(error, "Could not update the password");
+    throwIfError(error, t("auth.errors.resetFailed"));
   }
 }

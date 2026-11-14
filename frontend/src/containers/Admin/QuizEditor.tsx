@@ -3,6 +3,7 @@ import { RiAddLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { t } from "@/i18n";
 import QuestionCard from "./QuestionCard";
 
 const NEW_QUESTION: Question = {
@@ -16,15 +17,15 @@ const NEW_QUESTION: Question = {
 
 // Returns the first problem that would stop a draft from saving, or null if it is ready.
 export function findDraftProblem(draft: QuizDraft): string | null {
-  if (!draft.title.trim()) return "The quiz needs a title.";
+  if (!draft.title.trim()) return t("quiz.problems.noTitle");
   for (const [index, question] of draft.questions.entries()) {
-    const label = `Question ${index + 1}`;
-    if (!question.prompt.trim()) return `${label} needs question text.`;
+    const number = index + 1;
+    if (!question.prompt.trim()) return t("quiz.problems.noPrompt", { number });
     if (question.type === "multiple_choice" && question.choices.some((choice) => !choice.trim())) {
-      return `${label} has an empty choice.`;
+      return t("quiz.problems.emptyChoice", { number });
     }
     if (question.type === "short_answer" && !question.answer.trim()) {
-      return `${label} needs a correct answer.`;
+      return t("quiz.problems.noAnswer", { number });
     }
   }
   return null;
@@ -42,7 +43,7 @@ const QuizEditor = ({ draft, onChange }: QuizEditorProps) => {
   return (
     <div className="flex flex-col gap-4">
       <Field>
-        <FieldLabel htmlFor="quiz-title">Quiz title</FieldLabel>
+        <FieldLabel htmlFor="quiz-title">{t("quiz.editor.title")}</FieldLabel>
         <Input
           id="quiz-title"
           value={draft.title}
@@ -68,7 +69,7 @@ const QuizEditor = ({ draft, onChange }: QuizEditorProps) => {
         onClick={() => setQuestions([...draft.questions, NEW_QUESTION])}
       >
         <RiAddLine data-icon="inline-start" />
-        Add question
+        {t("quiz.editor.addQuestion")}
       </Button>
     </div>
   );

@@ -22,7 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { describeError } from "@/i18n";
+import { describeError, t } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { useAuth } from "../../services/auth";
 import { useDocumentAPI, useDocuments } from "../../services/document/context";
@@ -120,12 +120,12 @@ const Documents = () => {
     () =>
       store.onJobFinished((finished) => {
         if (finished.status === "succeeded") {
-          toast.success("Your quiz is ready.");
+          toast.success(t("quiz.ready"));
           if (finished.documentId === selectedIdRef.current && finished.quizId !== null) {
             void load(finished.quizId);
           }
         } else {
-          toast.error(describeError(finished.error) ?? "The quiz couldn't be made.");
+          toast.error(describeError(finished.error) ?? t("errors.jobs.generic"));
         }
       }),
     [store, load],
@@ -136,7 +136,7 @@ const Documents = () => {
     if (error.kind === "not_signed_in") {
       sessionLost();
     } else if (error.kind === "not_found") {
-      toast.error("This document no longer exists.");
+      toast.error(t("errors.notFound.document"));
       void store.refresh();
     } else {
       if (error.kind === "http") console.error(`${fallback}:`, error);
@@ -144,7 +144,7 @@ const Documents = () => {
     }
   };
 
-  const confirmDiscard = () => !dirty || window.confirm("You have unsaved changes. Discard them?");
+  const confirmDiscard = () => !dirty || window.confirm(t("quiz.confirmDiscard"));
 
   const select = (document: Document) => {
     if (document.id === selectedId || !confirmDiscard()) return;
@@ -159,19 +159,20 @@ const Documents = () => {
     setStarting(true);
     const result = await store.start(documentId);
     setStarting(false);
-    if (!result.ok) reportRequestError(result.error, "Could not start writing the quiz.");
+    if (!result.ok) reportRequestError(result.error, t("jobs.startFailed"));
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
     event.target.value = ""; // Let the same file be chosen again.
     if (file === null) return;
+    // The server refuses these too, with the same codes.
     if (uploadTypeFor(file.type, file.name) === null) {
-      toast.error("This file type isn't supported. Upload a PDF, image, Word or text file.");
+      toast.error(t("errors.upload.unsupportedType"));
       return;
     }
     if (file.size > MAX_UPLOAD_BYTES) {
-      toast.error(`Files can be at most ${MAX_UPLOAD_MB} MB.`);
+      toast.error(t("errors.upload.tooLarge", { maxMb: MAX_UPLOAD_MB }));
       return;
     }
     if (!confirmDiscard()) return;
@@ -180,10 +181,10 @@ const Documents = () => {
     const result = await store.upload(file);
     setUploading(false);
     if (!result.ok) {
-      reportRequestError(result.error, "Failed to upload file.");
+      reportRequestError(result.error, t("documents.uploadFailed"));
       return;
     }
-    toast.success("File uploaded. Writing your quiz…");
+    toast.success(t("documents.uploaded"));
     // Open the new document on its quiz tab, which shows the job's progress.
     navigate(result.document.id, "quiz");
   };
@@ -197,13 +198,13 @@ const Documents = () => {
     }
     const parsed = QuizDraftSchema.safeParse(draft);
     if (!parsed.success) {
-      toast.error("The quiz has a field that is not valid.");
+      toast.error(t("quiz.invalidField"));
       return;
     }
     if (await save(parsed.data)) {
-      toast.success("Quiz saved.");
+      toast.success(t("quiz.saved"));
     } else {
-      toast.error("Could not save the quiz.");
+      toast.error(t("quiz.saveFailed"));
     }
   };
 
@@ -213,17 +214,17 @@ const Documents = () => {
     <div className="flex h-full min-h-0">
       {/* The list; on small screens it gives way to the open document. */}
       <section
-        aria-label="Documents"
+        aria-label={t("documents.title")}
         className={cn(
           "min-w-0 flex-col",
           panelOpen ? "hidden lg:flex lg:w-[42%] lg:shrink-0 lg:border-r" : "flex flex-1",
         )}
       >
         <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-          <h1 className="text-sm font-medium">Documents</h1>
+          <h1 className="text-sm font-medium">{t("documents.title")}</h1>
           <span className="text-sm text-muted-foreground">{documents.length}</span>
           <label
-            title={`Up to ${MAX_UPLOAD_MB} MB: PDF, image, Word, markdown or text`}
+            title={t("documents.uploadHint", { maxMb: MAX_UPLOAD_MB })}
             className={buttonVariants({
               size: "sm",
               className:
@@ -232,7 +233,7 @@ const Documents = () => {
           >
             <input
               type="file"
-              aria-label="Upload notes"
+              aria-label={t("documents.uploadLabel")}
               onChange={(event) => void handleFileChange(event)}
               className="sr-only"
               disabled={busy}
@@ -243,23 +244,21 @@ const Documents = () => {
             ) : (
               <RiUploadLine data-icon="inline-start" />
             )}
-            Upload
+            {t("documents.upload")}
           </label>
         </header>
         {loadState.status === "loading" ? (
           <div className="flex flex-1 items-center justify-center">
-            <Spinner className="size-5" aria-label="Loading documents" />
+            <Spinner className="size-5" aria-label={t("documents.loadingList")} />
           </div>
         ) : loadState.status === "failed" ? (
           <div role="alert" className="flex flex-col items-start gap-3 px-4 py-6">
             <p className="text-sm text-muted-foreground">
-              {loadState.error.kind === "network"
-                ? "Couldn't reach the server. Check your connection."
-                : "Your documents couldn't be loaded."}
+              {loadState.error.kind === "network" ? t("errors.network") : t("documents.loadFailed")}
             </p>
             <Button size="sm" variant="secondary" onClick={() => void store.refresh()}>
               <RiRefreshLine data-icon="inline-start" />
-              Retry
+              {t("common.retry")}
             </Button>
           </div>
         ) : (
@@ -286,7 +285,7 @@ const Documents = () => {
               size="icon-sm"
               className="lg:hidden"
               onClick={close}
-              aria-label="Back to documents"
+              aria-label={t("documents.back")}
             >
               <RiArrowLeftLine />
             </Button>
@@ -297,8 +296,8 @@ const Documents = () => {
               size="icon-sm"
               className="ml-auto hidden lg:inline-flex"
               onClick={close}
-              aria-label="Close document"
-              title="Close"
+              aria-label={t("documents.closeDocument")}
+              title={t("common.close")}
             >
               <RiCloseLine />
             </Button>
@@ -307,11 +306,11 @@ const Documents = () => {
             <TabsList>
               <TabsTrigger value="viewer">
                 <KindIcon kind={kindOf(selected)} />
-                Viewer
+                {t("documents.tabs.viewer")}
               </TabsTrigger>
               <TabsTrigger value="quiz">
                 {jobActive && <Spinner aria-hidden />}
-                Quiz
+                {t("documents.tabs.quiz")}
               </TabsTrigger>
             </TabsList>
           </div>
@@ -323,24 +322,20 @@ const Documents = () => {
           <TabsContent value="quiz" className="flex min-h-0 flex-col">
             {draft !== null && !jobActive && (
               <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2">
-                {dirty && <Badge variant="outline">Unsaved changes</Badge>}
+                {dirty && <Badge variant="outline">{t("quiz.unsavedChanges")}</Badge>}
                 <div className="ml-auto flex flex-wrap items-center gap-2">
                   <Button
                     size="sm"
                     variant="ghost"
                     disabled={busy}
                     onClick={() => {
-                      if (
-                        window.confirm(
-                          "Regenerating replaces this quiz, including your edits. Continue?",
-                        )
-                      ) {
+                      if (window.confirm(t("quiz.confirmRegenerate"))) {
                         void handleStartJob(selected.id);
                       }
                     }}
                   >
                     <RiRefreshLine data-icon="inline-start" />
-                    Regenerate
+                    {t("quiz.regenerate")}
                   </Button>
                   <Button
                     size="sm"
@@ -349,7 +344,7 @@ const Documents = () => {
                     disabled={busy || !quiz || dirty}
                   >
                     <RiDownloadLine data-icon="inline-start" />
-                    Download PDF
+                    {t("quiz.downloadPdf")}
                   </Button>
                   <Button
                     size="sm"
@@ -358,7 +353,7 @@ const Documents = () => {
                     disabled={busy || !dirty}
                   >
                     <RiSaveLine data-icon="inline-start" />
-                    Save
+                    {t("common.save")}
                   </Button>
                 </div>
               </div>
@@ -381,10 +376,10 @@ const Documents = () => {
                   !quizLoading && (
                     <div className="flex flex-col items-start gap-3">
                       <p className="text-sm text-muted-foreground">
-                        There is no quiz for {selected.filename} yet.
+                        {t("quiz.none", { filename: selected.filename })}
                       </p>
                       <Button onClick={() => handleStartJob(selected.id)} disabled={busy}>
-                        Generate quiz
+                        {t("quiz.generate")}
                       </Button>
                     </div>
                   )

@@ -9,6 +9,7 @@ import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Spinner } from "@/components/ui/spinner";
+import { t } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { formatDate, formatSize, KindIcon, kindLabel, kindOf } from "./kinds";
 
@@ -21,20 +22,27 @@ export function stateOf(document: Document, job: GenerateQuizJob | null): Docume
   return document.quizId !== null ? "ready" : "not_started";
 }
 
-const GROUPS: { state: DocumentState; label: string }[] = [
-  { state: "in_progress", label: "In progress" },
-  { state: "failed", label: "Needs attention" },
-  { state: "ready", label: "Ready" },
-  { state: "not_started", label: "No quiz yet" },
-];
+// The list's groups, in order.
+const GROUPS: DocumentState[] = ["in_progress", "failed", "ready", "not_started"];
 
-const FILTERS = [
-  { value: "all", label: "All" },
-  { value: "ready", label: "Ready" },
-  { value: "in_progress", label: "In progress" },
-  { value: "failed", label: "Needs attention" },
-] as const;
-type Filter = (typeof FILTERS)[number]["value"];
+function stateLabel(state: DocumentState): string {
+  switch (state) {
+    case "in_progress":
+      return t("documents.state.inProgress");
+    case "failed":
+      return t("documents.state.failed");
+    case "ready":
+      return t("documents.state.ready");
+    case "not_started":
+      return t("documents.state.notStarted");
+  }
+}
+
+const FILTERS = ["all", "ready", "in_progress", "failed"] as const;
+type Filter = (typeof FILTERS)[number];
+
+const filterLabel = (filter: Filter) =>
+  filter === "all" ? t("documents.filter.all") : stateLabel(filter);
 
 export function StateIcon({ state, className }: { state: DocumentState; className?: string }) {
   switch (state) {
@@ -51,15 +59,15 @@ export function StateIcon({ state, className }: { state: DocumentState; classNam
 
 // A short description of a document's quiz, for its row.
 function quizSummary(state: DocumentState, job: GenerateQuizJob | null): string {
-  if (state === "ready") return "Quiz ready";
-  if (state === "failed") return "Failed";
-  if (state === "not_started") return "No quiz";
-  if (job?.status === "queued") return "Waiting…";
-  if (job?.stage === "reading") return "Reading…";
+  if (state === "ready") return t("documents.summary.ready");
+  if (state === "failed") return t("documents.summary.failed");
+  if (state === "not_started") return t("documents.summary.notStarted");
+  if (job?.status === "queued") return t("documents.summary.queued");
+  if (job?.stage === "reading") return t("documents.summary.reading");
   if (job?.stage === "writing" && job.questionsWritten > 0) {
-    return `Writing… ${job.questionsWritten} so far`;
+    return t("documents.summary.writingProgress", { count: job.questionsWritten });
   }
-  return "Writing…";
+  return t("documents.summary.writing");
 }
 
 const Pill = ({ children, className }: { children: React.ReactNode; className?: string }) => (
@@ -90,14 +98,18 @@ const DocumentList = ({ documents, jobOf, selectedId, onSelect, disabled }: Docu
     const job = jobOf(document.id);
     return { document, job, state: stateOf(document, job) };
   });
-  const groups = GROUPS.filter((group) => filter === "all" || group.state === filter)
-    .map((group) => ({ ...group, rows: rows.filter((row) => row.state === group.state) }))
+  const groups = GROUPS.filter((state) => filter === "all" || state === filter)
+    .map((state) => ({ state, rows: rows.filter((row) => row.state === state) }))
     .filter((group) => group.rows.length > 0);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col @container">
-      <div className="flex shrink-0 flex-wrap gap-1.5 px-3 py-3" role="group" aria-label="Filter">
-        {FILTERS.map(({ value, label }) => (
+      <div
+        className="flex shrink-0 flex-wrap gap-1.5 px-3 py-3"
+        role="group"
+        aria-label={t("documents.filter.label")}
+      >
+        {FILTERS.map((value) => (
           <Button
             key={value}
             size="sm"
@@ -106,17 +118,18 @@ const DocumentList = ({ documents, jobOf, selectedId, onSelect, disabled }: Docu
             aria-pressed={filter === value}
             onClick={() => setFilter(value)}
           >
-            {label}
+            {filterLabel(value)}
           </Button>
         ))}
       </div>
 
-      <nav aria-label="Your documents" className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+      <nav
+        aria-label={t("documents.listLabel")}
+        className="min-h-0 flex-1 overflow-y-auto px-2 pb-4"
+      >
         {groups.length === 0 && (
           <p className="px-3 py-6 text-sm text-muted-foreground">
-            {documents.length === 0
-              ? "Upload your notes to generate your first quiz."
-              : "No documents match this filter."}
+            {documents.length === 0 ? t("documents.empty") : t("documents.noMatches")}
           </p>
         )}
         {groups.map((group) => (
@@ -124,7 +137,7 @@ const DocumentList = ({ documents, jobOf, selectedId, onSelect, disabled }: Docu
             <CollapsibleTrigger className="group/trigger flex h-9 w-full items-center gap-2 rounded-lg bg-muted/50 px-3 text-sm font-medium hover:bg-muted">
               <RiArrowDownSLine className="size-4 text-muted-foreground transition-transform group-data-[panel-open]/trigger:rotate-0 -rotate-90" />
               <StateIcon state={group.state} className="size-4" />
-              {group.label}
+              {stateLabel(group.state)}
               <span className="text-muted-foreground">{group.rows.length}</span>
             </CollapsibleTrigger>
             <CollapsibleContent>

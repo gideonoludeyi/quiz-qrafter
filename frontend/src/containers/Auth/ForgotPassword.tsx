@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { t } from "@/i18n";
 import { useAuth } from "../../services/auth";
 import AuthLayout from "./AuthLayout";
 
@@ -20,10 +21,10 @@ const ForgotPassword = () => {
       // The link in the email brings the user back to the update-password page.
       await requestPasswordReset(email, `${window.location.origin}/update-password`);
       // The same message whether or not the email has an account, so it doesn't reveal which do.
-      setMessage("If an account exists for this email, a password reset link has been sent.");
+      setMessage(t("auth.forgotPasswordPage.sent"));
       setTimeout(() => navigate("/login"), 5000); // Redirect to login after 5 seconds
     } catch (error) {
-      setMessage("There was an error processing your request. Please try again later.");
+      setMessage(t("auth.forgotPasswordPage.failed"));
     }
   };
 
@@ -37,9 +38,9 @@ const ForgotPassword = () => {
     const newError: Record<string, string> = {};
 
     if (!email.trim()) {
-      newError.email = "*Email is required*";
+      newError.email = t("auth.validation.emailRequired");
     } else if (!checkEmail(email)) {
-      newError.email = "*Email address should contain '@'*";
+      newError.email = t("auth.validation.emailInvalid");
     }
 
     setError(newError);
@@ -55,21 +56,21 @@ const ForgotPassword = () => {
 
   return (
     <AuthLayout
-      title="Forgot Password"
+      title={t("auth.forgotPasswordPage.title")}
       footer={
         <Button variant="link" nativeButton={false} render={<Link to="/login" />}>
-          Back to login
+          {t("auth.forgotPasswordPage.backToLogin")}
         </Button>
       }
     >
       <form onSubmit={handleSubmit}>
         <FieldGroup>
           <Field data-invalid={!!error.email}>
-            <FieldLabel htmlFor="email">Email</FieldLabel>
+            <FieldLabel htmlFor="email">{t("auth.email")}</FieldLabel>
             <Input
               id="email"
               type="email"
-              placeholder="Enter your email"
+              placeholder={t("auth.forgotPasswordPage.emailPlaceholder")}
               aria-invalid={!!error.email}
               value={email}
               onChange={(event) => handleEmail(event.target.value)}
@@ -77,7 +78,7 @@ const ForgotPassword = () => {
             <FieldError>{error.email}</FieldError>
           </Field>
           <Button type="submit" className="w-full" disabled={!isValid}>
-            Send Reset Link
+            {t("auth.forgotPasswordPage.submit")}
           </Button>
           {message && <p className="text-sm text-muted-foreground">{message}</p>}
         </FieldGroup>

@@ -11,28 +11,30 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
-import { describeError } from "@/i18n";
+import { describeError, t } from "@/i18n";
 
 // The prompt asks for about 10 questions; the bar only needs a rough scale.
 const EXPECTED_QUESTIONS = 10;
 
 // What the job is doing, in words, and roughly how far along it is (0–100).
 function describe(job: GenerateQuizJob): { label: string; percent: number } {
-  if (job.status === "queued") return { label: "Waiting to start…", percent: 5 };
+  if (job.status === "queued") return { label: t("jobs.stage.queued"), percent: 5 };
   switch (job.stage) {
     case "reading":
-      return { label: "Reading your document…", percent: 15 };
+      return { label: t("jobs.stage.reading"), percent: 15 };
     case "writing": {
       const written = job.questionsWritten;
       const share = Math.min(written, EXPECTED_QUESTIONS) / EXPECTED_QUESTIONS;
       return {
         label:
-          written === 0 ? "Writing questions…" : `Writing questions: ${written} written so far`,
+          written === 0
+            ? t("jobs.stage.writing")
+            : t("jobs.stage.writingProgress", { count: written }),
         percent: 25 + Math.round(share * 65),
       };
     }
     default:
-      return { label: "Starting…", percent: 10 };
+      return { label: t("jobs.stage.starting"), percent: 10 };
   }
 }
 
@@ -54,9 +56,9 @@ const JobStatus = ({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <RiErrorWarningLine className="size-5 text-destructive" />
-            The quiz for {filename} couldn't be made
+            {t("jobs.failed", { filename })}
           </CardTitle>
-          <CardDescription>{describeError(job.error) ?? "Something went wrong."}</CardDescription>
+          <CardDescription>{describeError(job.error) ?? t("errors.jobs.generic")}</CardDescription>
         </CardHeader>
         <CardFooter>
           <Button onClick={onRetry} disabled={retrying}>
@@ -65,7 +67,7 @@ const JobStatus = ({
             ) : (
               <RiRefreshLine data-icon="inline-start" />
             )}
-            Try again
+            {t("common.tryAgain")}
           </Button>
         </CardFooter>
       </Card>
@@ -78,14 +80,12 @@ const JobStatus = ({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Spinner className="size-5" />
-          Making a quiz from {filename}
+          {t("jobs.making", { filename })}
         </CardTitle>
-        <CardDescription>
-          This usually takes under a minute. You can leave this page.
-        </CardDescription>
+        <CardDescription>{t("jobs.takesAMinute")}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
-        <Progress value={percent} aria-label="Quiz progress" />
+        <Progress value={percent} aria-label={t("jobs.progressLabel")} />
         <p className="text-sm text-muted-foreground">{label}</p>
       </CardContent>
     </Card>

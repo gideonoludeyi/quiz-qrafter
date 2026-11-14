@@ -1,6 +1,7 @@
 import React from "react";
 import { RiFolder3Line, RiLogoutBoxRLine, RiMoonLine, RiSunLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
+import { t } from "@/i18n";
 import { useAuth } from "../../services/auth";
 import LogoDark from "../../assets/quiz_qrafter_logo_dark.svg";
 import LogoLight from "../../assets/quiz_qrafter_logo_light.svg";
@@ -11,11 +12,12 @@ import Documents from "../../containers/Documents/Documents";
 const Dashboard: React.FC = () => {
   const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const nextTheme = theme === "dark" ? "light" : "dark";
+  const switchTheme =
+    theme === "dark" ? t("common.theme.switchToLight") : t("common.theme.switchToDark");
   const logo = (
     <span className="flex items-center gap-2 text-sm font-semibold">
       <img src={theme === "dark" ? LogoLight : LogoDark} alt="" className="h-6 w-auto" />
-      Quiz Qrafter
+      {t("common.appName")}
     </span>
   );
   const accountActions = (
@@ -24,14 +26,14 @@ const Dashboard: React.FC = () => {
         variant="ghost"
         size="icon-sm"
         onClick={toggleTheme}
-        aria-label={`Switch to ${nextTheme} theme`}
-        title={`Switch to ${nextTheme} theme`}
+        aria-label={switchTheme}
+        title={switchTheme}
       >
         {theme === "dark" ? <RiSunLine /> : <RiMoonLine />}
       </Button>
       <Button variant="ghost" size="sm" onClick={() => signOut()}>
         <RiLogoutBoxRLine data-icon="inline-start" />
-        Log out
+        {t("auth.logOut")}
       </Button>
     </>
   );
@@ -41,13 +43,13 @@ const Dashboard: React.FC = () => {
     <div className="flex h-svh flex-col bg-sidebar text-sidebar-foreground md:flex-row dark:bg-background">
       <aside className="hidden w-60 shrink-0 flex-col gap-6 p-3 md:flex">
         <div className="flex h-9 items-center px-2">{logo}</div>
-        <nav aria-label="Main" className="flex flex-col gap-0.5">
+        <nav aria-label={t("common.mainNav")} className="flex flex-col gap-0.5">
           <span
             aria-current="page"
             className="flex h-8 items-center gap-2 rounded-lg bg-sidebar-accent px-2 text-sm font-medium text-sidebar-accent-foreground"
           >
             <RiFolder3Line className="size-4" aria-hidden />
-            Documents
+            {t("documents.title")}
           </span>
         </nav>
         <div className="mt-auto flex flex-col gap-2 border-t pt-3">

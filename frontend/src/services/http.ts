@@ -1,5 +1,5 @@
 import { ApiErrorResponseSchema, type AppError } from "@quizqrafter/shared";
-import { describeError } from "@/i18n";
+import { describeError, t } from "@/i18n";
 
 // Why a request failed, in terms the UI can act on. `reason` is the server's error code, if it sent one.
 export type RequestError =
@@ -92,9 +92,9 @@ export async function request<T>(
 export function describeRequestError(error: RequestError, fallback: string): string {
   switch (error.kind) {
     case "not_signed_in":
-      return "Your session has ended. Please sign in again.";
+      return t("errors.session.ended");
     case "network":
-      return "Couldn't reach the server. Check your connection.";
+      return t("errors.network");
     default:
       return describeError(error.reason) ?? fallback;
   }

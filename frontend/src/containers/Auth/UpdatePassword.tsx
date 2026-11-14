@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { t } from "@/i18n";
 import { useAuth } from "../../services/auth";
 import AuthLayout from "./AuthLayout";
 
@@ -43,19 +44,15 @@ const UpdatePassword = () => {
     let isValidConfirmPassword = checkNewPassword(confirmPassword);
     let passwordsMatch = newPassword === confirmPassword;
 
-    setErrorNew(
-      isValidNewPassword
-        ? ""
-        : "*Password should have at least 8 characters and one upper case letter*",
-    );
+    setErrorNew(isValidNewPassword ? "" : t("auth.validation.passwordWeak"));
     setErrorConfirm(
       isValidConfirmPassword
         ? passwordsMatch
           ? ""
-          : "*Passwords do not match*"
-        : "*Password should have at least 8 characters and one upper case letter*",
+          : t("auth.validation.passwordsDiffer")
+        : t("auth.validation.passwordWeak"),
     );
-    setMessageBad(passwordsMatch ? "" : "*Passwords do not match*");
+    setMessageBad(passwordsMatch ? "" : t("auth.validation.passwordsDiffer"));
 
     setValidation(isValidNewPassword && isValidConfirmPassword && passwordsMatch);
   }, [newPassword, confirmPassword]);
@@ -67,22 +64,20 @@ const UpdatePassword = () => {
 
     try {
       await resetPassword(token, newPassword);
-      setMessage("Your password has been successfully updated.");
+      setMessage(t("auth.updatePasswordPage.updated"));
       setTimeout(() => navigate("/login"), 3000); // Redirect to login after 3 seconds
     } catch (error) {
-      setMessageBad("There was an error updating your password. Please try again.");
+      setMessageBad(t("auth.updatePasswordPage.failed"));
     }
   };
 
   if (linkInvalid) {
     return (
-      <AuthLayout title="Update Your Password">
+      <AuthLayout title={t("auth.updatePasswordPage.title")}>
         <div className="flex flex-col gap-4">
-          <p className="text-sm text-destructive">
-            This password reset link is invalid or has expired.
-          </p>
+          <p className="text-sm text-destructive">{t("auth.updatePasswordPage.linkInvalid")}</p>
           <Button nativeButton={false} render={<Link to="/forgot-password" />}>
-            Request a new link
+            {t("auth.updatePasswordPage.requestNewLink")}
           </Button>
         </div>
       </AuthLayout>
@@ -90,11 +85,13 @@ const UpdatePassword = () => {
   }
 
   return (
-    <AuthLayout title="Update Your Password">
+    <AuthLayout title={t("auth.updatePasswordPage.title")}>
       <form onSubmit={handleSubmit}>
         <FieldGroup>
           <Field data-invalid={!!errorNew}>
-            <FieldLabel htmlFor="new-password">New password</FieldLabel>
+            <FieldLabel htmlFor="new-password">
+              {t("auth.updatePasswordPage.newPassword")}
+            </FieldLabel>
             <Input
               id="new-password"
               type="password"
@@ -105,7 +102,9 @@ const UpdatePassword = () => {
             <FieldError>{errorNew}</FieldError>
           </Field>
           <Field data-invalid={!!errorConfirm}>
-            <FieldLabel htmlFor="confirm-password">Confirm new password</FieldLabel>
+            <FieldLabel htmlFor="confirm-password">
+              {t("auth.updatePasswordPage.confirmPassword")}
+            </FieldLabel>
             <Input
               id="confirm-password"
               type="password"
@@ -116,7 +115,7 @@ const UpdatePassword = () => {
             <FieldError>{errorConfirm}</FieldError>
           </Field>
           <Button type="submit" className="w-full" disabled={!isValid}>
-            Update Password
+            {t("auth.updatePasswordPage.submit")}
           </Button>
           {message && <p className="text-sm text-muted-foreground">{message}</p>}
           {messageBad && <p className="text-sm text-destructive">{messageBad}</p>}

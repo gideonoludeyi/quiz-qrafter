@@ -5,6 +5,7 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { t } from "@/i18n";
 import { useDocumentAPI } from "../../services/document/context";
 import { useAuth } from "../../services/auth";
 import {
@@ -53,7 +54,7 @@ const DocumentViewer = ({ document }: { document: Document }) => {
     void load().then((result) => {
       if (cancelled) return;
       if (result.ok) return setLoaded(result.value);
-      const failed = failure(result.error, "The document couldn't be loaded.");
+      const failed = failure(result.error, t("documents.viewer.loadFailed"));
       if (failed !== null) setLoaded(failed);
     });
 
@@ -81,7 +82,7 @@ const DocumentViewer = ({ document }: { document: Document }) => {
     const file = await service.getFile(document.id);
     if (file.ok) downloadBlob(file.value, document.filename);
     else {
-      const failed = failure(file.error, "The document couldn't be downloaded.");
+      const failed = failure(file.error, t("documents.viewer.downloadFailed"));
       if (failed !== null) setLoaded(failed);
     }
   };
@@ -93,7 +94,7 @@ const DocumentViewer = ({ document }: { document: Document }) => {
         <span aria-hidden>·</span>
         <span>{formatSize(document.size)}</span>
         {kind === "word" && (
-          <span className="hidden sm:inline">· Text only; formatting isn't shown</span>
+          <span className="hidden sm:inline">· {t("documents.viewer.wordTextOnly")}</span>
         )}
         <div className="ml-auto flex items-center gap-1">
           {loaded.status === "ready" && loaded.url && (
@@ -102,8 +103,8 @@ const DocumentViewer = ({ document }: { document: Document }) => {
               size="icon-sm"
               nativeButton={false}
               render={<a href={loaded.url} target="_blank" rel="noreferrer" />}
-              aria-label="Open in a new tab"
-              title="Open in a new tab"
+              aria-label={t("documents.viewer.openInNewTab")}
+              title={t("documents.viewer.openInNewTab")}
             >
               <RiExternalLinkLine />
             </Button>
@@ -112,8 +113,8 @@ const DocumentViewer = ({ document }: { document: Document }) => {
             variant="ghost"
             size="icon-sm"
             onClick={() => void download()}
-            aria-label="Download original"
-            title="Download original"
+            aria-label={t("documents.viewer.downloadOriginal")}
+            title={t("documents.viewer.downloadOriginal")}
           >
             <RiDownloadLine />
           </Button>
@@ -123,7 +124,7 @@ const DocumentViewer = ({ document }: { document: Document }) => {
       <div className="min-h-0 flex-1 overflow-auto bg-muted/40" data-testid="document-viewer">
         {loaded.status === "loading" ? (
           <div className="flex h-full items-center justify-center">
-            <Spinner className="size-5" aria-label="Loading document" />
+            <Spinner className="size-5" aria-label={t("documents.viewer.loading")} />
           </div>
         ) : loaded.status === "failed" ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted-foreground">
@@ -131,7 +132,11 @@ const DocumentViewer = ({ document }: { document: Document }) => {
             {loaded.message}
           </div>
         ) : kind === "pdf" && loaded.url ? (
-          <iframe title={`${document.filename} preview`} src={loaded.url} className="size-full" />
+          <iframe
+            title={t("documents.viewer.previewTitle", { filename: document.filename })}
+            src={loaded.url}
+            className="size-full"
+          />
         ) : kind === "image" && loaded.url ? (
           <div className="flex min-h-full items-center justify-center p-6">
             <img
@@ -149,9 +154,7 @@ const DocumentViewer = ({ document }: { document: Document }) => {
             {loaded.text}
           </pre>
         ) : (
-          <p className="p-6 text-sm text-muted-foreground">
-            This file can't be shown here. Download it to open it.
-          </p>
+          <p className="p-6 text-sm text-muted-foreground">{t("documents.viewer.cantShow")}</p>
         )}
       </div>
     </div>
