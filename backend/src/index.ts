@@ -16,7 +16,11 @@ const deps = { prisma, queue, providers: createProviders(config) };
 const app = createApp(config, deps);
 
 const server = serve({ fetch: app.fetch, port: config.port }, () => {
-  log("info", "API listening", { port: config.port, storage: config.storage, ai: config.ai });
+  log("info", "API listening", {
+    port: config.port,
+    storage: config.storage.kind,
+    ai: config.ai.kind,
+  });
 });
 
 // Once: a signal can arrive more than once, e.g. through both the process group and node --watch.

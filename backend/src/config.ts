@@ -94,36 +94,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
 
   const parsed = EnvSchema.parse(env);
 
-  if (parsed.AI === "gemini") {
-    if (parsed.GEMINI_API_KEY === undefined) {
-      throw new Error("AI=gemini needs GEMINI_API_KEY. Set it, or set AI=fake to work offline.");
-    }
-    if (!parsed.LLM_MODEL.startsWith("gemini")) {
-      throw new Error(
-        `LLM_MODEL=${parsed.LLM_MODEL} is not a Gemini model. Use a Gemini model such as gemini-4-hydrogen, or leave LLM_MODEL unset.`,
-      );
-    }
-  }
-
   const isProduction = parsed.NODE_ENV === "production";
   if (isProduction && parsed.BETTER_AUTH_SECRET === undefined) {
     throw new Error("BETTER_AUTH_SECRET is required in production (at least 32 characters).");
-  }
-  if (isProduction && parsed.EMAIL === "console") {
-    throw new Error(
-      "EMAIL=console prints reset links, so it can't run in production. Set EMAIL=resend.",
-    );
-  }
-  if (parsed.EMAIL === "resend" && parsed.RESEND_API_KEY === undefined) {
-    throw new Error(
-      "EMAIL=resend needs RESEND_API_KEY. Set it, or set EMAIL=console to print reset links to the log.",
-    );
-  }
-
-  if (parsed.STORAGE === "gcs" && parsed.GOOGLE_APPLICATION_CREDENTIALS === undefined) {
-    throw new Error(
-      "STORAGE=gcs needs GOOGLE_APPLICATION_CREDENTIALS. Set it, or set STORAGE=local to keep files on disk.",
-    );
   }
 
   return {
@@ -136,30 +109,79 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       secret: parsed.BETTER_AUTH_SECRET ?? "development-only-better-auth-secret-0123456789",
       baseURL: parsed.BETTER_AUTH_URL ?? `http://localhost:${parsed.PORT}`,
     },
-    email: {
-      sender: parsed.EMAIL,
-      resendApiKey: parsed.RESEND_API_KEY,
-      from: parsed.EMAIL_FROM,
-    },
+    email: emailConfig(parsed, isProduction),
     queue: {
       databaseUrl: parsed.DATABASE_URL,
       schema: parsed.QUEUE_SCHEMA,
     },
-    storage: parsed.STORAGE,
-    localDataDir: path.resolve(BACKEND_DIR, parsed.LOCAL_DATA_DIR),
-    gcs: {
-      credentialsFile: parsed.GOOGLE_APPLICATION_CREDENTIALS,
-      documentsBucket: parsed.DOCUMENTS_BUCKET,
-    },
-    ai: parsed.AI,
-    gemini: {
-      apiKey: parsed.GEMINI_API_KEY,
-      model: parsed.LLM_MODEL,
-    },
-    fakeAiDelayMs: parsed.FAKE_AI_DELAY_MS,
+    storage: storageConfig(parsed),
+    ai: aiConfig(parsed),
     worker: {
       concurrency: parsed.WORKER_CONCURRENCY,
       port: parsed.WORKER_PORT,
     },
   };
+}
+
+type Env = z.infer<typeof EnvSchema>;
+
+// Where uploads and transcripts are kept. Each variant holds exactly the settings it needs.
+export type StorageConfig =
+  | { kind: "local"; dir: string }
+  | { kind: "gcs"; bucket: string; credentialsFile: string };
+
+function storageConfig(env: Env): StorageConfig {
+  if (env.STORAGE === "local") {
+    return { kind: "local", dir: path.resolve(BACKEND_DIR, env.LOCAL_DATA_DIR) };
+  }
+  if (env.GOOGLE_APPLICATION_CREDENTIALS === undefined) {
+    throw new Error(
+      "STORAGE=gcs needs GOOGLE_APPLICATION_CREDENTIALS. Set it, or set STORAGE=local to keep files on disk.",
+    );
+  }
+  return {
+    kind: "gcs",
+    bucket: env.DOCUMENTS_BUCKET,
+    credentialsFile: env.GOOGLE_APPLICATION_CREDENTIALS,
+  };
+}
+
+// Who reads Documents and writes Quizzes.
+export type AiConfig =
+  | { kind: "fake"; delayMs: number }
+  | { kind: "gemini"; apiKey: string; model: string };
+
+function aiConfig(env: Env): AiConfig {
+  if (env.AI === "fake") return { kind: "fake", delayMs: env.FAKE_AI_DELAY_MS };
+  if (env.GEMINI_API_KEY === undefined) {
+    throw new Error("AI=gemini needs GEMINI_API_KEY. Set it, or set AI=fake to work offline.");
+  }
+  if (!env.LLM_MODEL.startsWith("gemini")) {
+    throw new Error(
+      `LLM_MODEL=${env.LLM_MODEL} is not a Gemini model. Use a Gemini model such as gemini-4-hydrogen, or leave LLM_MODEL unset.`,
+    );
+  }
+  return { kind: "gemini", apiKey: env.GEMINI_API_KEY, model: env.LLM_MODEL };
+}
+
+// How password reset emails go out, and from which sender.
+export type EmailConfig =
+  | { kind: "console"; from: string }
+  | { kind: "resend"; apiKey: string; from: string };
+
+function emailConfig(env: Env, isProduction: boolean): EmailConfig {
+  if (env.EMAIL === "console") {
+    if (isProduction) {
+      throw new Error(
+        "EMAIL=console prints reset links, so it can't run in production. Set EMAIL=resend.",
+      );
+    }
+    return { kind: "console", from: env.EMAIL_FROM };
+  }
+  if (env.RESEND_API_KEY === undefined) {
+    throw new Error(
+      "EMAIL=resend needs RESEND_API_KEY. Set it, or set EMAIL=console to print reset links to the log.",
+    );
+  }
+  return { kind: "resend", apiKey: env.RESEND_API_KEY, from: env.EMAIL_FROM };
 }

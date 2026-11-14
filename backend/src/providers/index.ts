@@ -1,5 +1,6 @@
-import type { Config } from "../config";
+import type { AiConfig, Config, EmailConfig, StorageConfig } from "../config";
 import { ConsoleEmailSender } from "./email/consoleEmailSender";
+import type { EmailSender } from "./email/types";
 import { ResendEmailSender } from "./email/resendEmailSender";
 import { FakeExtractor } from "./fake/fakeExtractor";
 import { FakeQuizGenerator } from "./fake/fakeQuizGenerator";
@@ -8,34 +9,35 @@ import { createGeminiClient } from "./gemini/client";
 import { GeminiQuizGenerator } from "./gemini/quizGenerator";
 import { GeminiTextExtractor } from "./gemini/textExtractor";
 import { GcsBlobStore } from "./real/gcsBlobStore";
-import type { Providers } from "./types";
+import type { BlobStore, Providers } from "./types";
 
 // Builds the storage, AI and email providers that config selects.
-// loadConfig has already checked that each selected provider's credentials are set.
 export function createProviders(config: Config): Providers {
-  const blobs =
-    config.storage === "local"
-      ? new FileBlobStore(config.localDataDir)
-      : new GcsBlobStore(config.gcs.documentsBucket, config.gcs.credentialsFile!);
+  return { blobs: blobStore(config.storage), email: emailSender(config.email), ...ai(config.ai) };
+}
 
-  const email =
-    config.email.sender === "resend"
-      ? new ResendEmailSender(config.email.resendApiKey!, config.email.from)
-      : new ConsoleEmailSender();
+function blobStore(storage: StorageConfig): BlobStore {
+  return storage.kind === "local"
+    ? new FileBlobStore(storage.dir)
+    : new GcsBlobStore(storage.bucket, storage.credentialsFile);
+}
 
-  if (config.ai === "fake") {
+function emailSender(email: EmailConfig): EmailSender {
+  return email.kind === "resend"
+    ? new ResendEmailSender(email.apiKey, email.from)
+    : new ConsoleEmailSender();
+}
+
+function ai(config: AiConfig): Pick<Providers, "extractor" | "generator"> {
+  if (config.kind === "fake") {
     return {
-      blobs,
-      email,
-      extractor: new FakeExtractor(config.fakeAiDelayMs),
-      generator: new FakeQuizGenerator(config.fakeAiDelayMs),
+      extractor: new FakeExtractor(config.delayMs),
+      generator: new FakeQuizGenerator(config.delayMs),
     };
   }
-  const ai = createGeminiClient(config.gemini.apiKey!);
+  const client = createGeminiClient(config.apiKey);
   return {
-    blobs,
-    email,
-    extractor: new GeminiTextExtractor(ai, config.gemini.model),
-    generator: new GeminiQuizGenerator(ai, config.gemini.model),
+    extractor: new GeminiTextExtractor(client, config.model),
+    generator: new GeminiQuizGenerator(client, config.model),
   };
 }

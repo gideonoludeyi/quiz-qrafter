@@ -31,8 +31,8 @@ const health = new Hono().get("/healthz", async (c) => {
 });
 const server = serve({ fetch: health.fetch, port: config.worker.port }, () => {
   log("info", "Quiz worker running", {
-    storage: config.storage,
-    ai: config.ai,
+    storage: config.storage.kind,
+    ai: config.ai.kind,
     concurrency: config.worker.concurrency,
     port: config.worker.port,
   });

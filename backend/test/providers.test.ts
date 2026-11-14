@@ -129,18 +129,50 @@ describe("loadConfig", () => {
     ]);
   });
 
+  it("needs credentials for Google Cloud Storage, and keeps them with the bucket", () => {
+    expect(() => loadConfig({ STORAGE: "gcs", AI: "fake" })).toThrow(
+      /GOOGLE_APPLICATION_CREDENTIALS/,
+    );
+    expect(
+      loadConfig({ STORAGE: "gcs", AI: "fake", GOOGLE_APPLICATION_CREDENTIALS: "key.json" })
+        .storage,
+    ).toEqual({ kind: "gcs", bucket: "quizqrafter-documents", credentialsFile: "key.json" });
+  });
+
+  it("refuses to print reset links in production", () => {
+    const production = {
+      ...local,
+      AI: "fake",
+      NODE_ENV: "production",
+      BETTER_AUTH_SECRET: "s".repeat(32),
+    };
+    expect(() => loadConfig(production)).toThrow(/EMAIL=console/);
+    expect(
+      loadConfig({ ...production, EMAIL: "resend", RESEND_API_KEY: "re_k" }).email,
+    ).toMatchObject({
+      kind: "resend",
+      apiKey: "re_k",
+    });
+  });
+
   it("keeps local files under backend/, wherever the process was started", () => {
     const backendDir = path.resolve(import.meta.dirname, "..");
-    expect(loadConfig({ ...local, AI: "fake" }).localDataDir).toBe(path.join(backendDir, ".data"));
-    expect(loadConfig({ ...local, AI: "fake", LOCAL_DATA_DIR: "/srv/qq" }).localDataDir).toBe(
-      "/srv/qq",
-    );
+    expect(loadConfig({ ...local, AI: "fake" }).storage).toEqual({
+      kind: "local",
+      dir: path.join(backendDir, ".data"),
+    });
+    expect(loadConfig({ ...local, AI: "fake", LOCAL_DATA_DIR: "/srv/qq" }).storage).toEqual({
+      kind: "local",
+      dir: "/srv/qq",
+    });
   });
 
   it("defaults to gemini-4-hydrogen", () => {
-    expect(loadConfig({ ...local, AI: "gemini", GEMINI_API_KEY: "k" }).gemini.model).toBe(
-      "gemini-4-hydrogen",
-    );
+    expect(loadConfig({ ...local, AI: "gemini", GEMINI_API_KEY: "k" }).ai).toEqual({
+      kind: "gemini",
+      apiKey: "k",
+      model: "gemini-4-hydrogen",
+    });
   });
 });
 
