@@ -9,7 +9,9 @@ import {
 } from "../src/core/jobs";
 import { type Deps, NotFoundError, TooManyJobsError } from "../src/core/types";
 import { PermanentJobError } from "../src/providers/errors";
+import { GeminiQuizGenerator } from "../src/providers/gemini/quizGenerator";
 import { createMemoryQueue } from "../src/queue/memory";
+import { captureEvents, finishedWith, geminiStreaming } from "./fixtures";
 import {
   QUIZ,
   blobDir,
@@ -136,6 +138,47 @@ describe("running a job", () => {
     expect(await jobRow(jobId)).toMatchObject({ status: "succeeded", attempts: 2 });
     const quiz = await prisma.quiz.findUniqueOrThrow({ where: { documentId } });
     expect(quiz.title).toBe(QUIZ.title);
+  });
+});
+
+describe("a run's wide event", () => {
+  it("says why Gemini refused, and that a retry won't help", async () => {
+    const gemini = new GeminiQuizGenerator(geminiStreaming(finishedWith("RECITATION")), "m");
+    const refused = depsWith(queue, (text, onProgress) => gemini.generate(text, onProgress));
+    const { userId, documentId, jobId } = await userWithDocument(refused);
+
+    const events = captureEvents();
+    await queue.deliver(refused, jobId);
+    events.stop();
+
+    expect(events.named("job.run")).toEqual([
+      expect.objectContaining({
+        level: "error",
+        "app.job.id": jobId,
+        "app.job.kind": "generate_quiz",
+        "app.job.run": 1,
+        "app.job.final": false,
+        "app.generate_quiz.stage": "writing",
+        "app.job.outcome": "failed",
+        "app.user.id": userId,
+        "app.document.id": documentId,
+        "app.ai.finish_reason": "RECITATION",
+        "error.type": "RecitationError",
+        "app.error.retriable": false,
+      }),
+    ]);
+  });
+
+  it("marks a transient failure as retrying", async () => {
+    const { jobId } = await userWithDocument(succeeding);
+    const events = captureEvents();
+    await queue.deliver(failingWith(new Error("503 overloaded")), jobId);
+    events.stop();
+    expect(events.named("job.run")[0]).toMatchObject({
+      "app.job.outcome": "retrying",
+      "app.error.retriable": true,
+      "exception.message": "503 overloaded",
+    });
   });
 });
 

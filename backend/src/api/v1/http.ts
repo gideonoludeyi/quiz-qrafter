@@ -5,6 +5,7 @@ import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
 import { NotFoundError, TooManyJobsError, UnsupportedFileError } from "../../core/types";
+import { annotate, recordError } from "../../observability/events";
 import type { AppEnv } from "./env";
 
 const IdSchema = z.coerce.number().int().positive();
@@ -62,8 +63,9 @@ export function userIdOf(c: Context<AppEnv>): number {
   return c.get("userId")!;
 }
 
-// Maps known errors to status codes; anything else is a 500.
+// Maps known errors to status codes; anything else is a 500, recorded in full.
 export function errorHandler(error: Error, c: Context) {
+  annotate({ "error.type": error.name });
   if (error instanceof z.ZodError) {
     return c.json({ error: "Invalid request", issues: error.issues }, 400);
   }
@@ -82,6 +84,6 @@ export function errorHandler(error: Error, c: Context) {
   if (error instanceof HTTPException) {
     return error.getResponse();
   }
-  console.error(error);
+  recordError(error);
   return sendStatus(c, 500);
 }

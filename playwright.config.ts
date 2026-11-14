@@ -27,6 +27,8 @@ export default defineConfig({
       // Gemini credentials are needed.
       command: "npm run dev --workspace=backend",
       url: `http://localhost:${API_PORT}/healthz`,
+      // Wide events go to stdout, so a failing test shows what the API and worker did.
+      stdout: "pipe",
       env: {
         // The backend also reads backend/.env (Prisma loads it too), but never overrides a
         // variable that is already set. Blanking the renamed ones keeps a developer's

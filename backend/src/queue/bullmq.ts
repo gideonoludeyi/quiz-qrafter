@@ -14,6 +14,7 @@ import {
   reconcileQuizJobs,
 } from "../core/jobs";
 import type { Deps, MessageState, QuizQueue } from "../core/types";
+import { log } from "../observability/events";
 
 // The BullMQ queue carrying quiz jobs from the API to the workers.
 export const QUIZ_QUEUE = "quiz-jobs";
@@ -116,9 +117,9 @@ export async function startBullWorker(
       .then(async (failed) => {
         if (failed) await giveUpQuizJob(deps, job.data.quizJobId);
       })
-      .catch((error) => console.error("Recording a failed quiz job failed:", error));
+      .catch(() => {}); // giveUpQuizJob's event records the failure.
   });
-  worker.on("error", (error) => console.error("Quiz worker error:", error));
+  worker.on("error", (error) => log("error", "Quiz worker error", {}, error));
 
   await worker.waitUntilReady();
   return {

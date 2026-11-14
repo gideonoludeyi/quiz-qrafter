@@ -1,4 +1,6 @@
+import type { GoogleGenAI } from "@google/genai";
 import JSZip from "jszip";
+import { captureOutput } from "../src/observability/events";
 
 export const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
@@ -19,3 +21,24 @@ export async function docxWith(text: string): Promise<Buffer> {
   );
   return zip.generateAsync({ type: "nodebuffer" });
 }
+
+// Collects the wide events and log lines written until `stop` is called.
+export function captureEvents() {
+  const lines: Record<string, unknown>[] = [];
+  const stop = captureOutput((line) => lines.push(JSON.parse(line) as Record<string, unknown>));
+  const named = (event: string) => lines.filter((line) => line.event === event);
+  return { lines, named, stop };
+}
+
+// A Gemini client whose stream yields `chunks`.
+export const geminiStreaming = (...chunks: object[]) =>
+  ({
+    models: {
+      generateContentStream: async () =>
+        (async function* () {
+          yield* chunks;
+        })(),
+    },
+  }) as unknown as GoogleGenAI;
+
+export const finishedWith = (finishReason: string) => ({ candidates: [{ finishReason }] });

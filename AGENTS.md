@@ -36,7 +36,9 @@ Users upload study material (PDF, image, Word or text) and AI writes a quiz from
 
 The maintainers write this file by hand. When something here is wrong or missing, say so in your reply and suggest the wording; they will make the edit.
 
-`GLOSSARY.md` defines the domain language (Document, Quiz job, Active, Run, Final run, Stage). Use its terms when naming code, tests and messages, and propose a new entry when you name a new concept.
+`GLOSSARY.md` defines the domain language (Document, Job, etc.). Use its terms when naming code, tests and messages, and propose a new entry when you name a new concept.
+
+Architecture decisions and the reasons for them are recorded in `docs/adr/`. Read the relevant one before proposing to change how something is built.
 
 ## Running locally
 
@@ -53,16 +55,16 @@ The fake AI fails on any document containing `FAKE_FAIL`, and `FAKE_AI_DELAY_MS`
 
 The product depends on these rules. The backend enforces them under concurrent requests, and each one has a test.
 
-- **At most `MAX_ACTIVE_JOBS_PER_USER` (3) Active Quiz jobs per user**, across all their Documents. This caps how much AI work one user can start at once.
+- **At most `MAX_ACTIVE_JOBS_PER_USER` (3) Active GenerateQuizJobs per user**, across all their Documents. This caps how much AI work one user can start at once.
     - It applies to uploads and to generating, regenerating and retrying a quiz.
     - Going over returns `429` with a message the user sees.
     - A refused upload leaves no Document and no stored file.
-- **At most one Active Quiz job per Document.** Asking again returns the job already in progress, which doesn't count against the limit.
-- **Retries:** a failure a retry can't fix (a refusal, a file too long, an unsupported type) fails the Quiz job at once with a message for the user. Any other failure is retried twice, 30 s and then 60 s later. After that the user sees a generic message.
+- **At most one Active GenerateQuizJob per Document.** Asking again returns the job already in progress, which doesn't count against the limit.
+- **Retries:** a failure a retry can't fix (a refusal, a file too long, an unsupported type) fails the GenerateQuizJob at once with a message for the user. Any other failure is retried twice, 30 s and then 60 s later. After that the user sees a generic message.
 
-## Quiz jobs
+## GenerateQuizJobs
 
-The app's own Quiz job record is the truth users see: status, Stage, progress and error. BullMQ only delivers, retries and recovers jobs. It runs on its Postgres backend in its own schema (`QUEUE_SCHEMA`), so there is no Redis. The business rules above live in the app's code, and BullMQ is configured from them.
+The app's own GenerateQuizJob record is the truth users see: status, Stage, progress and error. BullMQ only delivers, retries and recovers jobs. It runs on its Postgres backend in its own schema (`QUEUE_SCHEMA`), so there is no Redis. The business rules above live in the app's code, and BullMQ is configured from them.
 
 - The API only starts jobs. Worker processes run them (`npm run worker --workspace=backend`), and you can run as many as you like.
 - When a worker stalls, BullMQ gives the job a new Run elsewhere. Only the newest Run's writes count, including the saved quiz.
@@ -94,3 +96,7 @@ The user runs migrations in their own terminal, because Prisma asks for approval
 `vp add <vite-plugin>` fails with `ERESOLVE`. The `vite` alias points at Vite+ core, which bundles Vite 8 but reports version `1.x`, so plugin peer ranges never match, and overrides don't help. Instead, add the plugin to `package.json` by hand and run `npm install --legacy-peer-deps` once, from the repo root. After that, `vp install` works. Keep `legacy-peer-deps` out of `.npmrc`, so peer checks stay on for everything else.
 
 Drop this workaround once Vite+ ships [PR #3317](https://github.com/voidzero-dev/vite-plus/pull/3317) (tracking issue [#2806](https://github.com/voidzero-dev/vite-plus/issues/2806)).
+
+## Observability
+
+Each API request and each Run of a Job emits one wide event: a JSON line on stdout (compact in development) that is also an OpenTelemetry span. Record facts about the work as fields on the current event, never as separate log lines. Field names are defined in one place, OpenTelemetry's where they exist and `app.*` with glossary terms otherwise. Events carry ids, never emails, filenames, document text, tokens, or other sensitive personally identifiable information (SPII). Redaction enforces this, and tests check it.

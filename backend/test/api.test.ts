@@ -19,7 +19,7 @@ import { MAX_ACTIVE_JOBS_PER_USER } from "../src/core/jobs";
 import { createProviders } from "../src/providers";
 import type { ConsoleEmailSender } from "../src/providers/email/consoleEmailSender";
 import { createMemoryQueue } from "../src/queue/memory";
-import { DOCX, docxWith } from "./fixtures";
+import { DOCX, captureEvents, docxWith } from "./fixtures";
 import { testDatabaseUrl } from "./testDatabase";
 
 const NOTES = "Mitochondria are the powerhouse of the cell. They produce ATP.";
@@ -296,7 +296,19 @@ describe("quiz API", () => {
     await runJobs();
     for (let i = 0; i < MAX_ACTIVE_JOBS_PER_USER; i++) await upload(`busy-${i}.txt`).expect(202);
 
+    const events = captureEvents();
     const refusedUpload = await upload("one-too-many.txt").expect(429);
+    events.stop();
+    // The request's wide event says who was refused, and why.
+    expect(events.named("http.request")).toEqual([
+      expect.objectContaining({
+        "http.request.method": "POST",
+        "http.route": "/api/v1/document/upload",
+        "http.response.status_code": 429,
+        "app.user.id": expect.any(Number),
+        "error.type": "TooManyJobsError",
+      }),
+    ]);
     expect(refusedUpload.body.error).toMatch(/at most 3 quizzes in progress/);
     const refusedJob = await busy
       .post("/api/v1/jobs")
@@ -371,6 +383,7 @@ describe("authentication", () => {
 
   it("resets a forgotten password through the emailed link", async () => {
     await loggedInAgent("forgetful@example.com");
+    const events = captureEvents();
     const redirectTo = `${ORIGIN}/update-password`;
     const sentBefore = email.outbox.length;
 
@@ -400,6 +413,13 @@ describe("authentication", () => {
 
     await signIn(request.agent(app), "forgetful@example.com", "NewPassword1").expect(200);
     await signIn(request.agent(app), "forgetful@example.com", PASSWORD).expect(401);
+
+    // Events record the reset by user id, never by email address or token.
+    events.stop();
+    expect(events.named("email.password_reset")).toHaveLength(1);
+    const written = JSON.stringify(events.lines);
+    expect(written).not.toContain("forgetful");
+    expect(written).not.toContain(token);
   });
 
   it("answers a reset request for an unknown email the same way, without sending anything", async () => {

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { type Document, type QuizJob, uploadTypeFor } from "@quizqrafter/shared";
 import { assertCanStartJob, startQuizJob, toQuizJob } from "./jobs";
+import { annotate } from "../observability/events";
 import { readLocally } from "../providers/localText";
 import { type Deps, NotFoundError, UnsupportedFileError } from "./types";
 
@@ -60,7 +61,7 @@ export async function uploadDocument(
     // No document refers to the file, e.g. a concurrent upload took the last slot.
     await providers.blobs
       .delete(rawURL)
-      .catch((cause) => console.error(`Deleting unused file ${rawURL} failed:`, cause));
+      .catch(() => annotate({ "app.document.orphaned_file": true }));
     throw error;
   }
   const row = await prisma.document.findUniqueOrThrow({

@@ -1,14 +1,13 @@
 import path from "node:path";
-import type { GoogleGenAI } from "@google/genai";
 import PDFDocument from "pdfkit";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 import { loadConfig } from "../src/config";
 import { PermanentJobError } from "../src/providers/errors";
 import { RecitationError, streamText } from "../src/providers/gemini/client";
 import { GeminiTextExtractor, filePartFor } from "../src/providers/gemini/textExtractor";
 import { readLocally } from "../src/providers/localText";
 import { countQuestionsWritten } from "../src/providers/progress";
-import { DOCX, docxWith } from "./fixtures";
+import { DOCX, captureEvents, docxWith, finishedWith, geminiStreaming } from "./fixtures";
 
 describe("readLocally", () => {
   it("decodes text and markdown without calling the AI", async () => {
@@ -112,10 +111,12 @@ describe("loadConfig", () => {
   });
 
   it("starts with a warning, not an error, when the old WORKER setting is set", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const events = captureEvents();
     expect(() => loadConfig({ ...local, AI: "fake", WORKER: "inline" })).not.toThrow();
-    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/npm run worker/));
-    warn.mockRestore();
+    events.stop();
+    expect(events.lines).toEqual([
+      expect.objectContaining({ level: "warn", message: expect.stringMatching(/npm run worker/) }),
+    ]);
   });
 
   it("keeps local files under backend/, wherever the process was started", () => {
@@ -132,19 +133,6 @@ describe("loadConfig", () => {
     );
   });
 });
-
-// A Gemini client whose stream yields `chunks`.
-const geminiStreaming = (...chunks: object[]) =>
-  ({
-    models: {
-      generateContentStream: async () =>
-        (async function* () {
-          yield* chunks;
-        })(),
-    },
-  }) as unknown as GoogleGenAI;
-
-const finishedWith = (finishReason: string) => ({ candidates: [{ finishReason }] });
 
 describe("streamText", () => {
   const outcome = { task: "read this file", tooLong: "Too long." };

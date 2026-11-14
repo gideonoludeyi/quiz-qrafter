@@ -6,6 +6,7 @@ import {
   GoogleGenAI,
   type SafetyRating,
 } from "@google/genai";
+import { annotate } from "../../observability/events";
 import { PermanentJobError } from "../errors";
 
 // Finish reasons that mean the model declined to answer.
@@ -33,7 +34,9 @@ export function classifyGeminiError(error: unknown): unknown {
 }
 
 // Gemini stopped because its answer matched published text, e.g. when asked to copy a paper.
-export class RecitationError extends PermanentJobError {}
+export class RecitationError extends PermanentJobError {
+  override name = "RecitationError";
+}
 
 // A refusal shown to the user plainly; the cause records Gemini's reason, for the logs.
 function declined(
@@ -65,6 +68,7 @@ export async function streamText(
       last = chunk;
       const feedback = chunk.promptFeedback;
       if (feedback?.blockReason) {
+        annotate({ "app.ai.finish_reason": `BLOCKED_${feedback.blockReason}` });
         throw declined(task, `prompt blocked: ${feedback.blockReason}`, feedback.safetyRatings);
       }
       const piece = chunk.text;
@@ -79,6 +83,9 @@ export async function streamText(
 
   const candidate = last?.candidates?.[0];
   const finishReason = candidate?.finishReason;
+  if (finishReason !== undefined && finishReason !== FinishReason.STOP) {
+    annotate({ "app.ai.finish_reason": finishReason });
+  }
   if (DECLINED.has(finishReason)) {
     const ErrorType =
       finishReason === FinishReason.RECITATION ? RecitationError : PermanentJobError;

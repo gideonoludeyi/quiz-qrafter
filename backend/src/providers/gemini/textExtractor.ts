@@ -1,4 +1,5 @@
 import type { GoogleGenAI, Part } from "@google/genai";
+import { annotate } from "../../observability/events";
 import { PermanentJobError } from "../errors";
 import { readLocally, readPdfText } from "../localText";
 import type { TextExtractor } from "../types";
@@ -41,8 +42,9 @@ export class GeminiTextExtractor implements TextExtractor {
   ) {}
 
   async extract(content: Buffer, mimeType: string): Promise<string> {
-    const text =
-      (await readLocally(content, mimeType)) ?? (await this.transcribe(content, mimeType));
+    const local = await readLocally(content, mimeType);
+    annotate({ "app.document.read_from": local === null ? "ai" : "local" });
+    const text = local ?? (await this.transcribe(content, mimeType));
     if (!text.trim()) {
       throw new PermanentJobError("No text was found in this file.");
     }
@@ -58,7 +60,10 @@ export class GeminiTextExtractor implements TextExtractor {
       const text = await readPdfText(content).catch(() => "");
       // A scan has no text layer to fall back on.
       if (text.replace(/\s/g, "").length < MIN_PDF_TEXT_CHARS) throw error;
-      console.warn("Gemini declined to copy a PDF (RECITATION); using its text layer instead.");
+      annotate({
+        "app.document.read_from": "pdf_text_layer",
+        "app.ai.finish_reason": "RECITATION",
+      });
       return text;
     }
   }

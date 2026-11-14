@@ -4,6 +4,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { dash } from "@better-auth/infra";
 import type { Config } from "./config";
 import type { Deps } from "./core/types";
+import { withWideEvent } from "./observability/events";
 
 // Configures better-auth: email and password sign-in, sessions in Postgres, password reset emails.
 export function createAuth(config: Config, { prisma, providers }: Deps) {
@@ -23,9 +24,9 @@ export function createAuth(config: Config, { prisma, providers }: Deps) {
       },
       sendResetPassword: async ({ user, url }) => {
         // Not awaited, so the response time doesn't reveal whether the email has an account.
-        void providers.email
-          .sendPasswordReset({ to: user.email, name: user.name, url })
-          .catch((error) => console.error("Sending the password reset email failed:", error));
+        void withWideEvent("email.password_reset", { "app.user.id": Number(user.id) }, () =>
+          providers.email.sendPasswordReset({ to: user.email, name: user.name, url }),
+        ).catch(() => {}); // The event records the failure.
       },
     },
     advanced: {

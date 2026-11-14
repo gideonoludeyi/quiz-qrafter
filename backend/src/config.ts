@@ -1,5 +1,6 @@
 import path from "node:path";
 import { z } from "zod";
+import { log } from "./observability/events";
 
 // backend/, from both src/ and the bundled dist/. Relative paths in settings start here.
 const BACKEND_DIR = path.resolve(import.meta.dirname, "..");
@@ -85,7 +86,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   }
 
   if (env.WORKER) {
-    console.warn(
+    log(
+      "warn",
       "WORKER is no longer used: the API never runs quiz jobs. Start workers with `npm run worker`.",
     );
   }
@@ -106,6 +108,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   const isProduction = parsed.NODE_ENV === "production";
   if (isProduction && parsed.BETTER_AUTH_SECRET === undefined) {
     throw new Error("BETTER_AUTH_SECRET is required in production (at least 32 characters).");
+  }
+  if (isProduction && parsed.EMAIL === "console") {
+    throw new Error(
+      "EMAIL=console prints reset links, so it can't run in production. Set EMAIL=resend.",
+    );
   }
   if (parsed.EMAIL === "resend" && parsed.RESEND_API_KEY === undefined) {
     throw new Error(

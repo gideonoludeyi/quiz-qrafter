@@ -1,0 +1,91 @@
+import { describe, expect, it } from "vite-plus/test";
+import { annotate, withWideEvent } from "../src/observability/events";
+import { redactText } from "../src/observability/redact";
+import { PermanentJobError } from "../src/providers/errors";
+import { captureEvents } from "./fixtures";
+
+describe("redactText", () => {
+  it.each([
+    ["an email address", "No account for ada@example.co.uk", "No account for [email]"],
+    [
+      "a reset link's token",
+      "http://localhost:8080/api/auth/reset-password/Ab3dEf6hIj9kLm2nOp5qRs8t?callbackURL=x",
+      "http://localhost:8080/api/auth/reset-password/[token]?[query]",
+    ],
+    [
+      "a stored file's name",
+      "ENOENT: open '.data/u1/8f73462c-9691-40d9-8d7e-88c6ea26f317-my diary.txt'",
+      "ENOENT: open '.data/u1/8f73462c-9691-40d9-8d7e-88c6ea26f317-[filename]'",
+    ],
+    ["a session token", "token=k3J9xP2mQ8vR5tY7wZ1aB4cD6eF0gH", "token=[token]"],
+  ])("hides %s", (_what, text, redacted) => {
+    expect(redactText(text)).toBe(redacted);
+  });
+
+  it("keeps stack traces readable", () => {
+    const frame =
+      "at async Models.generateContentStreamWithContinuation (node_modules/@google/genai/src/models.ts:122:25)";
+    expect(redactText(frame)).toBe(frame);
+  });
+});
+
+describe("wide events", () => {
+  it("emits one event per unit of work, with the fields added while it ran", async () => {
+    const events = captureEvents();
+    await withWideEvent("job.run", { "app.job.id": 7, "app.job.run": 1 }, async () => {
+      annotate({ "app.generate_quiz.stage": "reading" });
+      annotate({ "app.generate_quiz.stage": "writing", "app.job.outcome": "succeeded" });
+    });
+    events.stop();
+
+    expect(events.lines).toEqual([
+      {
+        time: expect.any(String),
+        level: "info",
+        event: "job.run",
+        duration_ms: expect.any(Number),
+        "app.job.id": 7,
+        "app.job.run": 1,
+        "app.generate_quiz.stage": "writing",
+        "app.job.outcome": "succeeded",
+      },
+    ]);
+  });
+
+  it("records a failure with its causes, and rethrows it", async () => {
+    const events = captureEvents();
+    const refusal = new PermanentJobError("The AI declined to read this file.", {
+      cause: new Error("Gemini finished with RECITATION"),
+    });
+    await expect(
+      withWideEvent("job.run", {}, async () => {
+        throw refusal;
+      }),
+    ).rejects.toBe(refusal);
+    events.stop();
+
+    expect(events.lines[0]).toMatchObject({
+      level: "error",
+      "error.type": "PermanentJobError",
+      "exception.message": "The AI declined to read this file.",
+      "app.error.cause": "Error: Gemini finished with RECITATION",
+      "exception.stacktrace": expect.stringContaining("observability.test.ts"),
+    });
+  });
+
+  it("redacts what is added to an event", async () => {
+    const events = captureEvents();
+    await withWideEvent("http.request", {}, async () => {
+      annotate({ "exception.message": "No account for ada@example.com" });
+    });
+    events.stop();
+    expect(events.lines[0]["exception.message"]).toBe("No account for [email]");
+  });
+
+  it("ignores fields added outside any unit of work", () => {
+    const events = captureEvents();
+    annotate({ "app.user.id": 1 });
+    events.stop();
+    expect(events.lines).toEqual([]);
+  });
+});
