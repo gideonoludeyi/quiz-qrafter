@@ -90,7 +90,7 @@ model Document {
     rawURL           String
     createdAt        DateTime  @default(now())
     userId           Int
-    user             User      @relation(fields: [userId], references: [id])
+    user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
     quiz             Quiz?
     jobs             GenerateQuizJob[]
 
@@ -102,7 +102,7 @@ model Quiz {
     title      String
     createdAt  DateTime   @default(now())
     updatedAt  DateTime   @updatedAt
-    document   Document   @relation(fields: [documentId], references: [id])
+    document   Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
     documentId Int        @unique
     questions  Question[]
 

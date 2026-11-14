@@ -1,6 +1,7 @@
 import { readdirSync } from "node:fs";
 import path from "node:path";
-import { afterAll, beforeEach, describe, expect, it } from "vite-plus/test";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { deleteDocument } from "../src/core/documents";
 import {
   MAX_ACTIVE_JOBS_PER_USER,
   MAX_RUNS,
@@ -143,6 +144,48 @@ describe("running a job", () => {
     expect(await jobRow(jobId)).toMatchObject({ status: "succeeded", attempts: 2 });
     const quiz = await prisma.quiz.findUniqueOrThrow({ where: { documentId } });
     expect(quiz.title).toBe(QUIZ.title);
+  });
+});
+
+describe("deleting a document while its job runs", () => {
+  it("leaves no quiz behind", async () => {
+    const running = held();
+    const { userId, documentId, jobId } = await userWithDocument(running.deps);
+    const run = queue.deliver(running.deps, jobId);
+    await expect.poll(async () => (await jobRow(jobId)).stage).toBe("writing");
+
+    await deleteDocument(running.deps, userId, documentId);
+    running.release();
+    await run;
+
+    expect(await prisma.quiz.count({ where: { documentId } })).toBe(0);
+    expect(await prisma.generateQuizJob.count({ where: { id: jobId } })).toBe(0);
+    // The Run ended without asking for a retry.
+    expect(await queue.stateOf(jobId)).toBe("finished");
+  });
+
+  it("deletes the transcript of a document deleted while it was read", async () => {
+    const { blobs } = succeeding.providers;
+    const get = blobs.get.bind(blobs);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    // Holds the Run after it has read the file, before it saves the transcript.
+    const read = vi.spyOn(blobs, "get").mockImplementationOnce(async (url) => {
+      const content = await get(url);
+      await gate;
+      return content;
+    });
+    const { userId, documentId, jobId } = await userWithDocument(succeeding);
+    const run = queue.deliver(succeeding, jobId);
+    await expect.poll(async () => (await jobRow(jobId)).stage).toBe("reading");
+
+    await deleteDocument(succeeding, userId, documentId);
+    release();
+    await run;
+    read.mockRestore();
+
+    expect(await prisma.quiz.count({ where: { documentId } })).toBe(0);
+    expect(readdirSync(path.join(blobDir, `u${userId}`))).toEqual([]);
   });
 });
 

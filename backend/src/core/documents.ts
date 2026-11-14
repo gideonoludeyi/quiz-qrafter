@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { type Document, type GenerateQuizJob, uploadTypeFor } from "@quizqrafter/shared";
 import { readLocally } from "./documentReader";
 import { assertCanStartJob, startGenerateQuizJob, toGenerateQuizJob } from "./jobs";
@@ -99,4 +99,42 @@ export async function getDocumentText(deps: Deps, userId: number, id: number): P
   const text = await readLocally(content, mimeType);
   if (text === null) throw new UnsupportedFileError();
   return text;
+}
+
+// Deletes one of the user's documents, its quiz and jobs, then its stored files.
+export async function deleteDocument(
+  { prisma, providers }: Deps,
+  userId: number,
+  id: number,
+): Promise<void> {
+  let row: { rawURL: string; transcriptionURL: string | null };
+  try {
+    row = await prisma.document.delete({
+      where: { id, userId },
+      select: { rawURL: true, transcriptionURL: true },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+      throw new NotFoundError("errors.notFound.document");
+    }
+    throw error;
+  }
+
+  // After the delete, so a failure leaves only unreachable files, never a document without its file.
+  const urls = [row.rawURL, row.transcriptionURL].filter((url) => url !== null);
+  const results = await Promise.allSettled(urls.map((url) => providers.blobs.delete(url)));
+  if (results.some((result) => result.status === "rejected")) {
+    annotate({ "app.document.orphaned_file": true });
+  }
+}
+
+// Deletes all of a user's documents and their files, before their account is deleted.
+export async function deleteAllDocuments(deps: Deps, userId: number): Promise<void> {
+  const rows = await deps.prisma.document.findMany({ where: { userId }, select: { id: true } });
+  for (const { id } of rows) {
+    // One deleted meanwhile, e.g. from another tab, is already gone.
+    await deleteDocument(deps, userId, id).catch((error) => {
+      if (!(error instanceof NotFoundError)) throw error;
+    });
+  }
 }

@@ -20,7 +20,7 @@ export type EventFields = {
   "app.job.final"?: boolean;
   // started: a new Job was queued; existing: the document's Active Job was returned instead.
   "app.job.start"?: "started" | "existing" | "not_queued";
-  // What a Run did with its Job. superseded: a newer Run owns it; skipped: it had already finished.
+  // What a Run did with its Job. superseded: a newer Run owns it; skipped: it had finished, or was deleted.
   "app.job.outcome"?: "succeeded" | "failed" | "retrying" | "superseded" | "skipped";
   "app.job.progress_save_failed"?: boolean;
   // Counts from a worker's startup reconcile.

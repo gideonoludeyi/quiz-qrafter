@@ -362,6 +362,122 @@ describe("quiz API", () => {
   });
 });
 
+// Whether a stored file can still be read.
+const fileExists = (url: string) =>
+  deps.providers.blobs.get(url).then(
+    () => true,
+    () => false,
+  );
+
+// Uploads notes and runs the job, so the document has a quiz and a transcript.
+async function documentWithQuiz(agent: ReturnType<typeof request.agent>, filename = "notes.txt") {
+  const { body } = await agent
+    .post("/api/v1/document/upload")
+    .attach("file", Buffer.from(NOTES), { filename, contentType: "text/plain" })
+    .expect(202);
+  await runJobs();
+  return prisma.document.findUniqueOrThrow({
+    where: { id: body.document.id },
+    include: { quiz: true, jobs: true },
+  });
+}
+
+describe("deleting", () => {
+  it("deletes a document with its quiz, jobs and stored files", async () => {
+    const owner = await loggedInAgent("tidy@example.com");
+    const document = await documentWithQuiz(owner);
+    expect(document.quiz).not.toBeNull();
+    expect(document.transcriptionURL).not.toBeNull();
+
+    const bob = await loggedInAgent("not-the-owner@example.com");
+    const { body: refused } = await bob.delete(`/api/v1/document/${document.id}`).expect(404);
+    expect(refused.error.code).toBe("errors.notFound.document");
+
+    const events = captureEvents();
+    await owner.delete(`/api/v1/document/${document.id}`).expect(204);
+    events.stop();
+    expect(events.named("http.request")).toEqual([
+      expect.objectContaining({
+        "http.route": "/api/v1/document/:id",
+        "http.response.status_code": 204,
+        "app.document.id": document.id,
+      }),
+    ]);
+
+    expect(await prisma.document.count({ where: { id: document.id } })).toBe(0);
+    expect(await prisma.quiz.count({ where: { documentId: document.id } })).toBe(0);
+    expect(await prisma.generateQuizJob.count({ where: { documentId: document.id } })).toBe(0);
+    expect(await fileExists(document.rawURL)).toBe(false);
+    expect(await fileExists(document.transcriptionURL!)).toBe(false);
+    await owner.get(`/api/v1/quiz/${document.quiz!.id}`).expect(404);
+    await owner.delete(`/api/v1/document/${document.id}`).expect(404);
+  });
+
+  it("deletes a document even if its files can't be deleted", async () => {
+    const owner = await loggedInAgent("leaky@example.com");
+    const document = await documentWithQuiz(owner);
+    const deleteBlob = vi
+      .spyOn(deps.providers.blobs, "delete")
+      .mockRejectedValue(new Error("storage down"));
+
+    const events = captureEvents();
+    await owner.delete(`/api/v1/document/${document.id}`).expect(204);
+    events.stop();
+    deleteBlob.mockRestore();
+
+    expect(events.named("http.request")[0]).toMatchObject({ "app.document.orphaned_file": true });
+    expect(await prisma.document.count({ where: { id: document.id } })).toBe(0);
+  });
+
+  it("deletes a quiz, leaving its document", async () => {
+    const owner = await loggedInAgent("quiz-only@example.com");
+    const document = await documentWithQuiz(owner);
+    await owner.delete(`/api/v1/quiz/${document.quiz!.id}`).expect(204);
+
+    const { body } = await owner.get("/api/v1/document").expect(200);
+    expect(body.documents).toEqual([expect.objectContaining({ id: document.id, quizId: null })]);
+  });
+
+  it("deletes an account with its documents, quizzes and files, given the password", async () => {
+    const address = "leaving-for-good@example.com";
+    const agent = await loggedInAgent(address);
+    const first = await documentWithQuiz(agent, "first.txt");
+    const second = await documentWithQuiz(agent, "second.txt");
+    const user = await prisma.user.findUniqueOrThrow({ where: { email: address } });
+
+    // Without the password, or with a wrong one, nothing is deleted.
+    const missing = await agent.post("/api/auth/delete-user").set("Origin", ORIGIN).send({});
+    expect(missing.status).toBe(400);
+    expect(missing.body.code).toBe("INVALID_PASSWORD");
+    const wrong = await agent
+      .post("/api/auth/delete-user")
+      .set("Origin", ORIGIN)
+      .send({ password: "WrongPassword1" });
+    expect(wrong.status).toBe(400);
+    expect(wrong.body.code).toBe("INVALID_PASSWORD");
+    expect(await prisma.document.count({ where: { userId: user.id } })).toBe(2);
+
+    await agent
+      .post("/api/auth/delete-user")
+      .set("Origin", ORIGIN)
+      .send({ password: PASSWORD })
+      .expect(200);
+
+    expect(await prisma.user.count({ where: { id: user.id } })).toBe(0);
+    expect(await prisma.session.count({ where: { userId: user.id } })).toBe(0);
+    expect(await prisma.document.count({ where: { userId: user.id } })).toBe(0);
+    expect(
+      await prisma.quiz.count({ where: { id: { in: [first.quiz!.id, second.quiz!.id] } } }),
+    ).toBe(0);
+    for (const document of [first, second]) {
+      expect(await fileExists(document.rawURL)).toBe(false);
+      expect(await fileExists(document.transcriptionURL!)).toBe(false);
+    }
+    await agent.get("/api/v1/document").expect(401);
+    await signIn(request.agent(app), address, PASSWORD).expect(401);
+  });
+});
+
 describe("authentication", () => {
   it("refuses a second account with the same email, with a message instead of a 500", async () => {
     await loggedInAgent("dupe@example.com");

@@ -2,12 +2,14 @@ import { MAX_UPLOAD_BYTES } from "@quizqrafter/shared";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import {
+  deleteDocument,
   getDocumentFile,
   getDocumentText,
   listDocuments,
   uploadDocument,
 } from "../../core/documents";
 import type { Deps } from "../../core/types";
+import { annotate } from "../../observability/events";
 import type { AppEnv } from "./env";
 import { fileTooLarge, parseId, restrict, sendError, userIdOf } from "./http";
 
@@ -57,6 +59,14 @@ export default function documentRouter(deps: Deps) {
   router.get("/:id/text", restrict, async (c) => {
     const text = await getDocumentText(deps, userIdOf(c), parseId(c.req.param("id")));
     return c.text(text, 200);
+  });
+
+  // Deletes the document with its quiz, jobs and stored files.
+  router.delete("/:id", restrict, async (c) => {
+    const id = parseId(c.req.param("id"));
+    annotate({ "app.document.id": id });
+    await deleteDocument(deps, userIdOf(c), id);
+    return c.body(null, 204);
   });
 
   return router;

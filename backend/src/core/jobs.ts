@@ -182,10 +182,14 @@ async function runGenerateQuizJob(
     return;
   }
 
-  const job = await prisma.generateQuizJob.findUniqueOrThrow({
+  const job = await prisma.generateQuizJob.findUnique({
     where: { id: jobId },
     include: { document: true },
   });
+  if (job === null) {
+    annotate({ "app.job.outcome": "skipped" }); // Its document was deleted just now.
+    return;
+  }
   annotate({
     "app.document.id": job.documentId,
     "app.user.id": job.document.userId,
@@ -208,7 +212,18 @@ async function runGenerateQuizJob(
         `u${document.userId}/document-${document.id}.transcript`,
         text,
       );
-      await prisma.document.update({ where: { id: document.id }, data: { transcriptionURL } });
+      const { count } = await prisma.document.updateMany({
+        where: { id: document.id },
+        data: { transcriptionURL },
+      });
+      if (count === 0) {
+        // The document was deleted while it was read, so nothing will refer to the transcript.
+        annotate({ "app.job.outcome": "skipped" });
+        await providers.blobs
+          .delete(transcriptionURL)
+          .catch(() => annotate({ "app.document.orphaned_file": true }));
+        return;
+      }
     } else {
       annotate({ "app.document.read_from": "transcript" });
     }
