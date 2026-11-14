@@ -13,7 +13,7 @@ export interface DocumentJobService {
 
 export interface DocumentService extends DocumentJobService {
   // The document's original file, for the viewer.
-  getFile(id: number): Promise<Blob>;
+  getFile(id: number): Promise<RequestResult<Blob>>;
   // A Word document's text, which the viewer shows in place of the .docx file.
-  getText(id: number): Promise<string>;
+  getText(id: number): Promise<RequestResult<string>>;
 }

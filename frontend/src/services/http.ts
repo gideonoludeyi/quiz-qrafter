@@ -22,10 +22,26 @@ async function serverMessage(response: Response): Promise<string | null> {
   return typeof body?.error === "string" ? body.error : null;
 }
 
-// Sends an API request with the session cookie and parses the JSON response; never throws.
+// How to read a successful response's body, and which type to ask for.
+export type ResponseBody<T> = { accept: string; read: (response: Response) => Promise<T> };
+
+// A JSON body, checked against `schema`.
+export const asJson = <T>(schema: { parse: (data: unknown) => T }): ResponseBody<T> => ({
+  accept: "application/json",
+  read: async (response) => schema.parse(await response.json()),
+});
+// A file, such as a document or a PDF export.
+export const asBlob = (accept = "*/*"): ResponseBody<Blob> => ({
+  accept,
+  read: (response) => response.blob(),
+});
+export const asText: ResponseBody<string> = { accept: "text/plain", read: (r) => r.text() };
+export const noBody: ResponseBody<void> = { accept: "*/*", read: async () => undefined };
+
+// Sends an API request with the session cookie and reads the response; never throws.
 export async function request<T>(
   url: URL,
-  schema: { parse: (data: unknown) => T },
+  body: ResponseBody<T>,
   { method = "GET", json, form }: RequestOptions = {},
 ): Promise<RequestResult<T>> {
   let response: Response;
@@ -34,7 +50,7 @@ export async function request<T>(
       method,
       credentials: "include",
       headers: {
-        Accept: "application/json",
+        Accept: body.accept,
         ...(json === undefined ? {} : { "Content-Type": "application/json" }),
       },
       body: json === undefined ? form : JSON.stringify(json),
@@ -64,7 +80,7 @@ export async function request<T>(
   }
 
   try {
-    return { ok: true, value: schema.parse(await response.json()) };
+    return { ok: true, value: await body.read(response) };
   } catch {
     return {
       ok: false,
@@ -77,13 +93,18 @@ export async function request<T>(
   }
 }
 
-// Throws with the server's error message (or the fallback and status) when a response is not OK.
-export async function expectOk(response: Response, fallback: string): Promise<Response> {
-  if (response.ok) return response;
-  const body = await response.json().catch(() => null);
-  throw new Error(
-    typeof body?.error === "string" ? body.error : `${fallback} (${response.status})`,
-  );
+// What to tell the user about a failed request; `fallback` describes what was being done.
+export function describeRequestError(error: RequestError, fallback: string): string {
+  switch (error.kind) {
+    case "too_many_in_progress":
+      return error.message;
+    case "not_signed_in":
+      return "Your session has ended. Please sign in again.";
+    case "network":
+      return "Couldn't reach the server. Check your connection.";
+    default:
+      return error.message ?? fallback;
+  }
 }
 
 // Saves a blob to the user's device under the given filename.

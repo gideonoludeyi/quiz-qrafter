@@ -5,7 +5,7 @@ import {
   ListDocumentsResponseSchema,
   UploadDocumentResponseSchema,
 } from "@quizqrafter/shared";
-import { expectOk, request, type RequestResult } from "../http";
+import { asBlob, asJson, asText, request, type RequestResult } from "../http";
 import type { DocumentService } from "./types";
 
 export class QuizQrafterDocumentService implements DocumentService {
@@ -14,40 +14,36 @@ export class QuizQrafterDocumentService implements DocumentService {
   upload(file: File): Promise<RequestResult<{ document: Document; job: GenerateQuizJob }>> {
     const form = new FormData();
     form.append("file", file);
-    return request(new URL("/api/v1/document/upload", this.baseURL), UploadDocumentResponseSchema, {
-      method: "POST",
-      form,
-    });
+    return request(
+      new URL("/api/v1/document/upload", this.baseURL),
+      asJson(UploadDocumentResponseSchema),
+      {
+        method: "POST",
+        form,
+      },
+    );
   }
 
   async list(): Promise<RequestResult<Document[]>> {
     const result = await request(
       new URL("/api/v1/document", this.baseURL),
-      ListDocumentsResponseSchema,
+      asJson(ListDocumentsResponseSchema),
     );
     return result.ok ? { ok: true, value: result.value.documents } : result;
   }
 
   startJob(documentId: number): Promise<RequestResult<GenerateQuizJob>> {
-    return request(new URL("/api/v1/jobs", this.baseURL), GenerateQuizJobSchema, {
+    return request(new URL("/api/v1/jobs", this.baseURL), asJson(GenerateQuizJobSchema), {
       method: "POST",
       json: { documentId },
     });
   }
 
-  async getFile(id: number): Promise<Blob> {
-    const response = await fetch(new URL(`/api/v1/document/${id}/file`, this.baseURL), {
-      credentials: "include",
-    });
-    await expectOk(response, "Failed to load the document");
-    return response.blob();
+  getFile(id: number): Promise<RequestResult<Blob>> {
+    return request(new URL(`/api/v1/document/${id}/file`, this.baseURL), asBlob());
   }
 
-  async getText(id: number): Promise<string> {
-    const response = await fetch(new URL(`/api/v1/document/${id}/text`, this.baseURL), {
-      credentials: "include",
-    });
-    await expectOk(response, "Failed to load the document's text");
-    return response.text();
+  getText(id: number): Promise<RequestResult<string>> {
+    return request(new URL(`/api/v1/document/${id}/text`, this.baseURL), asText);
   }
 }

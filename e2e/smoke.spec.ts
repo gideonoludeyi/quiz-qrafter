@@ -136,3 +136,26 @@ test("a failed job shows why and can be retried", async ({ page }) => {
   await expect(alert).toContainText("The fake AI was asked to fail.");
   await expect(documentRow(page, "broken.txt")).toContainText("Failed");
 });
+
+test("a session that ends while editing a quiz sends you to sign in", async ({ page }) => {
+  await page.goto("/signup");
+  await page.locator("#firstname").pressSequentially("Ada");
+  await page.locator("#lastname").pressSequentially("Lovelace");
+  await page.locator("#email").pressSequentially(`e2e-session-${Date.now()}@example.com`);
+  await page.locator("#password").pressSequentially(PASSWORD);
+  await nudge(page.locator("#lastname"));
+  await page.getByRole("button", { name: "Sign up" }).click();
+  await page.waitForURL("**/dashboard");
+
+  await page
+    .getByLabel("Upload notes")
+    .setInputFiles(path.join(import.meta.dirname, "fixtures/notes.txt"));
+  // The other tests' jobs share the e2e worker, so this one may wait its turn.
+  await expect(page.locator("#quiz-title")).toHaveValue("Sample quiz", { timeout: 20_000 });
+
+  await page.locator("#question-1-prompt").fill("Edited after the session ended");
+  // As if the session expired, or was ended on another device.
+  await page.context().clearCookies();
+  await page.getByRole("button", { name: "Save" }).click();
+  await page.waitForURL("**/login");
+});

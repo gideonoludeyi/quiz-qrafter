@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { request } from "./http";
+import { asBlob, asJson, asText, describeRequestError, noBody, request } from "./http";
 
 const URL_ = new URL("http://api.test/api/v1/jobs");
-const schema = { parse: (data: unknown) => data as { id: number } };
+const schema = asJson({ parse: (data: unknown) => data as { id: number } });
 
 function respond(status: number, body: unknown) {
   vi.stubGlobal(
@@ -75,7 +75,48 @@ describe("request", () => {
         return data as { id: number };
       },
     };
-    const result = await request(URL_, strict);
+    const result = await request(URL_, asJson(strict));
     expect(result).toMatchObject({ ok: false, error: { kind: "http", status: 200 } });
+  });
+
+  it("reads a file, text or nothing, asking for the matching type", async () => {
+    const fetchMock = vi.fn(async () => new Response("%PDF-1.7", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pdf = await request(URL_, asBlob("application/pdf"));
+    expect(pdf.ok && (await pdf.value.text())).toBe("%PDF-1.7");
+    expect(await request(URL_, asText)).toEqual({ ok: true, value: "%PDF-1.7" });
+    expect(await request(URL_, noBody, { method: "DELETE" })).toEqual({
+      ok: true,
+      value: undefined,
+    });
+
+    const accepts = fetchMock.mock.calls.map(
+      (call) => ((call as unknown[])[1] as RequestInit).headers as Record<string, string>,
+    );
+    expect(accepts.map((headers) => headers.Accept)).toEqual([
+      "application/pdf",
+      "text/plain",
+      "*/*",
+    ]);
+  });
+});
+
+describe("describeRequestError", () => {
+  it("says what went wrong in words for the user", () => {
+    const fallback = "The quiz couldn't be saved.";
+    expect(
+      describeRequestError({ kind: "too_many_in_progress", message: "At most 3." }, fallback),
+    ).toBe("At most 3.");
+    expect(describeRequestError({ kind: "not_signed_in" }, fallback)).toMatch(/session has ended/);
+    expect(describeRequestError({ kind: "network", cause: null }, fallback)).toMatch(
+      /reach the server/,
+    );
+    expect(describeRequestError({ kind: "not_found", message: "Quiz not found" }, fallback)).toBe(
+      "Quiz not found",
+    );
+    expect(describeRequestError({ kind: "http", status: 500, message: null }, fallback)).toBe(
+      fallback,
+    );
   });
 });

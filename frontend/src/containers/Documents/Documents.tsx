@@ -25,7 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { useAuth } from "../../services/auth";
 import { useDocumentAPI, useDocuments } from "../../services/document/context";
-import type { RequestError } from "../../services/http";
+import { describeRequestError, type RequestError } from "../../services/http";
 import { useQuizAPI } from "../../services/quiz/context";
 import JobStatus from "../Admin/JobStatus";
 import QuizEditor, { findDraftProblem } from "../Admin/QuizEditor";
@@ -132,23 +132,14 @@ const Documents = () => {
 
   // Tells the user why an upload or job start was refused.
   const reportRequestError = (error: RequestError, fallback: string) => {
-    switch (error.kind) {
-      case "too_many_in_progress":
-        toast.error(error.message);
-        return;
-      case "not_found":
-        toast.error("This document no longer exists.");
-        void store.refresh();
-        return;
-      case "not_signed_in":
-        sessionLost();
-        return;
-      case "network":
-        toast.error("Couldn't reach the server. Check your connection.");
-        return;
-      default:
-        console.error(`${fallback}:`, error);
-        toast.error(fallback);
+    if (error.kind === "not_signed_in") {
+      sessionLost();
+    } else if (error.kind === "not_found") {
+      toast.error("This document no longer exists.");
+      void store.refresh();
+    } else {
+      if (error.kind === "http") console.error(`${fallback}:`, error);
+      toast.error(describeRequestError(error, fallback));
     }
   };
 
@@ -373,9 +364,7 @@ const Documents = () => {
             )}
             <div className="min-h-0 flex-1 overflow-y-auto">
               <div className="mx-auto flex max-w-3xl flex-col gap-4 p-4 sm:p-6">
-                {quizError && (
-                  <p className="text-sm text-destructive">Quiz error: {quizError.message}</p>
-                )}
+                {quizError && <p className="text-sm text-destructive">{quizError}</p>}
                 {jobToShow !== null && (
                   <JobStatus
                     job={jobToShow}

@@ -1,13 +1,16 @@
 import type { Quiz, QuizDraft } from "@quizqrafter/shared";
 import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
-import { downloadBlob } from "../http";
+import { useAuth } from "../auth";
+import { describeRequestError, downloadBlob, type RequestResult } from "../http";
 import type { QuizService } from "./types";
 
 type QuizContextValue = {
   quiz: Quiz | null;
   loading: boolean;
-  error: Error | null;
+  // Why the last action failed, in words for the user.
+  error: string | null;
   // Each action resolves to true on success; on failure it sets `error` and resolves to false.
+  // A lost session signs the user out instead.
   load: (quizId: number) => Promise<boolean>;
   save: (draft: QuizDraft) => Promise<boolean>;
   downloadPdf: () => Promise<boolean>;
@@ -24,44 +27,55 @@ type QuizProviderProps = {
 export function QuizProvider({ service, children }: QuizProviderProps) {
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { sessionLost } = useAuth();
 
-  // Runs a service call with shared loading and error handling.
-  const run = useCallback(async (action: () => Promise<void>): Promise<boolean> => {
-    setLoading(true);
-    try {
-      await action();
-      setError(null);
-      return true;
-    } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err : new Error("An error occurred"));
-      return false;
-    } finally {
+  // Runs a service call with shared loading and error handling, passing its value to `use`.
+  const run = useCallback(
+    async <T,>(
+      call: () => Promise<RequestResult<T>>,
+      use: (value: T) => void,
+      fallback: string,
+    ): Promise<boolean> => {
+      setLoading(true);
+      const result = await call();
       setLoading(false);
-    }
-  }, []);
+      if (result.ok) {
+        use(result.value);
+        setError(null);
+        return true;
+      }
+      if (result.error.kind === "not_signed_in") {
+        sessionLost();
+      } else {
+        if (result.error.kind === "http") console.error(`${fallback}:`, result.error);
+        setError(describeRequestError(result.error, fallback));
+      }
+      return false;
+    },
+    [sessionLost],
+  );
 
   const load = useCallback(
-    (quizId: number) => run(async () => setQuiz(await service.get(quizId))),
+    (quizId: number) => run(() => service.get(quizId), setQuiz, "The quiz couldn't be loaded."),
     [run, service],
   );
 
   const save = useCallback(
-    (draft: QuizDraft) =>
-      run(async () => {
-        if (quiz === null) throw new Error("There is no quiz to save.");
-        setQuiz(await service.update(quiz.id, draft));
-      }),
+    async (draft: QuizDraft) =>
+      quiz !== null &&
+      run(() => service.update(quiz.id, draft), setQuiz, "The quiz couldn't be saved."),
     [run, service, quiz],
   );
 
   const downloadPdf = useCallback(
-    () =>
-      run(async () => {
-        if (quiz === null) throw new Error("There is no quiz to download.");
-        downloadBlob(await service.exportPdf(quiz.id), "quiz.pdf");
-      }),
+    async () =>
+      quiz !== null &&
+      run(
+        () => service.exportPdf(quiz.id),
+        (pdf) => downloadBlob(pdf, "quiz.pdf"),
+        "The PDF couldn't be downloaded.",
+      ),
     [run, service, quiz],
   );
 

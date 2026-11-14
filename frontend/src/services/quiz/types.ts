@@ -1,8 +1,9 @@
 import type { Quiz, QuizDraft } from "@quizqrafter/shared";
+import type { RequestResult } from "../http";
 
 export interface QuizService {
-  get(id: number): Promise<Quiz>;
-  update(id: number, draft: QuizDraft): Promise<Quiz>;
-  remove(id: number): Promise<void>;
-  exportPdf(id: number): Promise<Blob>;
+  get(id: number): Promise<RequestResult<Quiz>>;
+  update(id: number, draft: QuizDraft): Promise<RequestResult<Quiz>>;
+  remove(id: number): Promise<RequestResult<void>>;
+  exportPdf(id: number): Promise<RequestResult<Blob>>;
 }

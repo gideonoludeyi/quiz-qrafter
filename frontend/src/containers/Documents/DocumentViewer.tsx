@@ -6,7 +6,13 @@ import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useDocumentAPI } from "../../services/document/context";
-import { downloadBlob } from "../../services/http";
+import { useAuth } from "../../services/auth";
+import {
+  describeRequestError,
+  downloadBlob,
+  type RequestError,
+  type RequestResult,
+} from "../../services/http";
 import { formatSize, kindLabel, kindOf } from "./kinds";
 
 type Loaded =
@@ -19,6 +25,7 @@ type Loaded =
 // and plain text (Word documents as their text). Give it a `key` per document, so it starts over.
 const DocumentViewer = ({ document }: { document: Document }) => {
   const { service } = useDocumentAPI();
+  const { sessionLost } = useAuth();
   const kind = kindOf(document);
   const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
 
@@ -26,39 +33,57 @@ const DocumentViewer = ({ document }: { document: Document }) => {
     let cancelled = false;
     let url: string | null = null;
 
-    const load = async (): Promise<Loaded> => {
+    const load = async (): Promise<RequestResult<Loaded>> => {
       if (kind === "word") {
-        return { status: "ready", blob: null, url: null, text: await service.getText(document.id) };
+        const text = await service.getText(document.id);
+        return text.ok
+          ? { ok: true, value: { status: "ready", blob: null, url: null, text: text.value } }
+          : text;
       }
-      const blob = await service.getFile(document.id);
+      const file = await service.getFile(document.id);
+      if (!file.ok) return file;
+      const blob = file.value;
       if (kind === "text" || kind === "markdown") {
-        return { status: "ready", blob, url: null, text: await blob.text() };
+        return { ok: true, value: { status: "ready", blob, url: null, text: await blob.text() } };
       }
       url = URL.createObjectURL(blob);
-      return { status: "ready", blob, url, text: null };
+      return { ok: true, value: { status: "ready", blob, url, text: null } };
     };
 
-    load()
-      .then((next) => !cancelled && setLoaded(next))
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        console.error("Loading the document failed:", error);
-        setLoaded({
-          status: "failed",
-          message: error instanceof Error ? error.message : "The document couldn't be loaded.",
-        });
-      });
+    void load().then((result) => {
+      if (cancelled) return;
+      if (result.ok) return setLoaded(result.value);
+      const failed = failure(result.error, "The document couldn't be loaded.");
+      if (failed !== null) setLoaded(failed);
+    });
 
     return () => {
       cancelled = true;
       if (url !== null) URL.revokeObjectURL(url);
     };
+    // failure only reads sessionLost, which is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [document.id, kind, service]);
 
+  // A failed load to show, or null when a lost session sends the user to sign in instead.
+  function failure(error: RequestError, fallback: string): Loaded | null {
+    if (error.kind === "not_signed_in") {
+      sessionLost();
+      return null;
+    }
+    if (error.kind === "http") console.error(`${fallback}:`, error);
+    return { status: "failed", message: describeRequestError(error, fallback) };
+  }
+
   const download = async () => {
-    const blob =
-      loaded.status === "ready" && loaded.blob ? loaded.blob : await service.getFile(document.id);
-    downloadBlob(blob, document.filename);
+    if (loaded.status === "ready" && loaded.blob)
+      return downloadBlob(loaded.blob, document.filename);
+    const file = await service.getFile(document.id);
+    if (file.ok) downloadBlob(file.value, document.filename);
+    else {
+      const failed = failure(file.error, "The document couldn't be downloaded.");
+      if (failed !== null) setLoaded(failed);
+    }
   };
 
   return (
