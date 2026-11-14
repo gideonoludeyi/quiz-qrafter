@@ -62,17 +62,20 @@ const DeleteAccountDialog = ({ open, onOpenChange }: DeleteAccountDialogProps) =
               id="delete-account-password"
               type="password"
               autoComplete="current-password"
+              required
               value={password}
               aria-invalid={error !== null}
+              aria-describedby={error === null ? undefined : "delete-account-password-error"}
               onChange={(event) => setPassword(event.target.value)}
             />
-            <FieldError>{error}</FieldError>
+            <FieldError id="delete-account-password-error">{error}</FieldError>
           </Field>
           <DialogFooter>
             <DialogClose render={<Button variant="outline" disabled={deleting} />}>
               {t("common.cancel")}
             </DialogClose>
-            <Button type="submit" variant="destructive" disabled={deleting || password === ""}>
+            {/* Enabled while empty: `required` lets the browser say why instead of a silent disabled button. */}
+            <Button type="submit" variant="destructive" disabled={deleting}>
               {deleting && <Spinner data-icon="inline-start" />}
               {t("auth.deleteAccountDialog.submit")}
             </Button>
