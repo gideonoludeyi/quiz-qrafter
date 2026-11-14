@@ -1,0 +1,17 @@
+# Every piece of wording users see, in English.
+#
+# Keys are grouped by feature: auth, documents, quiz, jobs, errors (anything the server or
+# a request can fail with; a server error's code is its key here), common, email, export.
+# Placeholders are {{name}}. A message that depends on a number has a key per plural form,
+# such as key_one and key_other, and is asked for with `count`.
+# To add a language, copy this file to <locale>.yml and translate the values.
+
+common:
+  appName: Quiz Qrafter
+  loading: Loading…
+
+errors:
+  jobs:
+    # The per-user limit on GenerateQuizJobs in progress; count is the limit.
+    tooManyActive_one: You can have at most {{count}} quiz in progress. Wait for it to finish.
+    tooManyActive_other: You can have at most {{count}} quizzes in progress. Wait for one to finish.
