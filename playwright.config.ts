@@ -36,8 +36,8 @@ export default defineConfig({
         ...Object.fromEntries(Object.keys(RENAMED_VARS).map((name) => [name, ""])),
         STORAGE: "local",
         AI: "fake",
-        // About 3 s of writing, so the page (which checks every 1.5 s) sees progress before the quiz appears.
-        FAKE_AI_DELAY_MS: "1000",
+        // About 4.5 s of writing, so the page (which checks every 2 s) sees progress before the quiz appears.
+        FAKE_AI_DELAY_MS: "1500",
         PORT: String(API_PORT),
         FRONTEND_URL: `http://localhost:${WEB_PORT}`,
         DATABASE_URL: testDatabaseUrl(),

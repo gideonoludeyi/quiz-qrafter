@@ -14,11 +14,10 @@ import { formatDate, formatSize, KindIcon, kindLabel, kindOf } from "./kinds";
 
 export type DocumentState = "in_progress" | "failed" | "ready" | "not_started";
 
-// Where a document stands, from its latest job (or `job`, a fresher copy) and its quiz.
-export function stateOf(document: Document, job: GenerateQuizJob | null = null): DocumentState {
-  const latest = job ?? document.latestJob;
-  if (isJobActive(latest)) return "in_progress";
-  if (latest?.status === "failed") return "failed";
+// Where a document stands, from its freshest GenerateQuizJob and its quiz.
+export function stateOf(document: Document, job: GenerateQuizJob | null): DocumentState {
+  if (isJobActive(job)) return "in_progress";
+  if (job?.status === "failed") return "failed";
   return document.quizId !== null ? "ready" : "not_started";
 }
 
@@ -76,25 +75,19 @@ const Pill = ({ children, className }: { children: React.ReactNode; className?: 
 
 type DocumentListProps = {
   documents: Document[];
+  // The freshest known GenerateQuizJob for a document.
+  jobOf: (documentId: number) => GenerateQuizJob | null;
   selectedId: number | null;
-  // A fresher copy of the selected document's job than the list has.
-  selectedJob: GenerateQuizJob | null;
   onSelect: (document: Document) => void;
   disabled: boolean;
 };
 
 // The user's documents, grouped by where their quiz stands, like an issue list.
-const DocumentList = ({
-  documents,
-  selectedId,
-  selectedJob,
-  onSelect,
-  disabled,
-}: DocumentListProps) => {
+const DocumentList = ({ documents, jobOf, selectedId, onSelect, disabled }: DocumentListProps) => {
   const [filter, setFilter] = useState<Filter>("all");
 
   const rows = documents.map((document) => {
-    const job = document.id === selectedId && selectedJob ? selectedJob : document.latestJob;
+    const job = jobOf(document.id);
     return { document, job, state: stateOf(document, job) };
   });
   const groups = GROUPS.filter((group) => filter === "all" || group.state === filter)

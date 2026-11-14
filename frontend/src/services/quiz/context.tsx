@@ -1,4 +1,4 @@
-import type { Quiz, QuizDraft, GenerateQuizJob } from "@quizqrafter/shared";
+import type { Quiz, QuizDraft } from "@quizqrafter/shared";
 import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { downloadBlob } from "../http";
 import type { QuizService } from "./types";
@@ -8,10 +8,6 @@ type QuizContextValue = {
   loading: boolean;
   error: Error | null;
   // Each action resolves to true on success; on failure it sets `error` and resolves to false.
-  // Resolves to the started job, or null on failure (with `error` set).
-  startJob: (documentId: number) => Promise<GenerateQuizJob | null>;
-  // Fetches a job's latest state; rejects on failure without touching `error`.
-  getJob: (id: number) => Promise<GenerateQuizJob>;
   load: (quizId: number) => Promise<boolean>;
   save: (draft: QuizDraft) => Promise<boolean>;
   downloadPdf: () => Promise<boolean>;
@@ -46,19 +42,6 @@ export function QuizProvider({ service, children }: QuizProviderProps) {
     }
   }, []);
 
-  const startJob = useCallback(
-    async (documentId: number) => {
-      let job: GenerateQuizJob | null = null;
-      await run(async () => {
-        job = await service.startJob(documentId);
-      });
-      return job;
-    },
-    [run, service],
-  );
-
-  const getJob = useCallback((id: number) => service.getJob(id), [service]);
-
   const load = useCallback(
     (quizId: number) => run(async () => setQuiz(await service.get(quizId))),
     [run, service],
@@ -88,8 +71,8 @@ export function QuizProvider({ service, children }: QuizProviderProps) {
   }, []);
 
   const value = useMemo<QuizContextValue>(
-    () => ({ quiz, loading, error, startJob, getJob, load, save, downloadPdf, clear }),
-    [quiz, loading, error, startJob, getJob, load, save, downloadPdf, clear],
+    () => ({ quiz, loading, error, load, save, downloadPdf, clear }),
+    [quiz, loading, error, load, save, downloadPdf, clear],
   );
 
   return <QuizContext.Provider value={value}>{children}</QuizContext.Provider>;

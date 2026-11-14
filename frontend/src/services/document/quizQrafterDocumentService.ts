@@ -1,36 +1,38 @@
 import {
   type Document,
   type GenerateQuizJob,
+  GenerateQuizJobSchema,
   ListDocumentsResponseSchema,
   UploadDocumentResponseSchema,
 } from "@quizqrafter/shared";
-import { expectOk } from "../http";
+import { expectOk, request, type RequestResult } from "../http";
 import type { DocumentService } from "./types";
 
 export class QuizQrafterDocumentService implements DocumentService {
   constructor(private readonly baseURL: URL) {}
 
-  async upload(file: File): Promise<{ document: Document; job: GenerateQuizJob }> {
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const response = await fetch(new URL("/api/v1/document/upload", this.baseURL), {
+  upload(file: File): Promise<RequestResult<{ document: Document; job: GenerateQuizJob }>> {
+    const form = new FormData();
+    form.append("file", file);
+    return request(new URL("/api/v1/document/upload", this.baseURL), UploadDocumentResponseSchema, {
       method: "POST",
-      credentials: "include",
-      body: formData,
-      headers: { Accept: "application/json" },
+      form,
     });
-    await expectOk(response, "Failed to upload file");
-    return UploadDocumentResponseSchema.parse(await response.json());
   }
 
-  async list(): Promise<Document[]> {
-    const response = await fetch(new URL("/api/v1/document", this.baseURL), {
-      credentials: "include",
-      headers: { Accept: "application/json" },
+  async list(): Promise<RequestResult<Document[]>> {
+    const result = await request(
+      new URL("/api/v1/document", this.baseURL),
+      ListDocumentsResponseSchema,
+    );
+    return result.ok ? { ok: true, value: result.value.documents } : result;
+  }
+
+  startJob(documentId: number): Promise<RequestResult<GenerateQuizJob>> {
+    return request(new URL("/api/v1/jobs", this.baseURL), GenerateQuizJobSchema, {
+      method: "POST",
+      json: { documentId },
     });
-    await expectOk(response, "Failed to load your documents");
-    return ListDocumentsResponseSchema.parse(await response.json()).documents;
   }
 
   async getFile(id: number): Promise<Blob> {

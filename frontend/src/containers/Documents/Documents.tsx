@@ -5,7 +5,6 @@ import {
   MAX_UPLOAD_BYTES,
   type QuizDraft,
   QuizDraftSchema,
-  type GenerateQuizJob,
   uploadTypeFor,
 } from "@quizqrafter/shared";
 import {
@@ -16,7 +15,7 @@ import {
   RiSaveLine,
   RiUploadLine,
 } from "@remixicon/react";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -24,9 +23,10 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { useDocumentAPI } from "../../services/document/context";
+import { useAuth } from "../../services/auth";
+import { useDocumentAPI, useDocuments } from "../../services/document/context";
+import type { RequestError } from "../../services/http";
 import { useQuizAPI } from "../../services/quiz/context";
-import { useGenerateQuizJob } from "../../services/quiz/useGenerateQuizJob";
 import JobStatus from "../Admin/JobStatus";
 import QuizEditor, { findDraftProblem } from "../Admin/QuizEditor";
 import DocumentList, { StateIcon, stateOf } from "./DocumentList";
@@ -35,24 +35,17 @@ import { KindIcon, kindOf } from "./kinds";
 
 const ACCEPT = Object.values(ALLOWED_UPLOAD_TYPES).flat().join(",");
 const MAX_UPLOAD_MB = MAX_UPLOAD_BYTES / (1024 * 1024);
-// How often to refresh the list while documents other than the open one have jobs running.
-const LIST_POLL_MS = 3_000;
 
 type Tab = "viewer" | "quiz";
-
-// The job worth showing for a document: one in progress, or one that failed.
-function visibleJob(document: Document): GenerateQuizJob | null {
-  const job = document.latestJob;
-  return job !== null && job.status !== "succeeded" ? job : null;
-}
 
 // The documents list, and a side panel showing the selected document and its quiz.
 // The selection and tab live in the URL (?document=12&tab=quiz), so a reload keeps them.
 const Documents = () => {
-  const { documents, upload, refresh, loading: uploadLoading } = useDocumentAPI();
+  const { store } = useDocumentAPI();
+  const { documents, loadState, jobOf } = useDocuments();
+  const { sessionLost } = useAuth();
   const {
     quiz,
-    startJob,
     load,
     save,
     downloadPdf,
@@ -63,25 +56,17 @@ const Documents = () => {
   const [params, setParams] = useSearchParams();
   const selectedId = params.get("document") === null ? null : Number(params.get("document"));
   const tab: Tab = params.get("tab") === "quiz" ? "quiz" : "viewer";
-  const [loaded, setLoaded] = useState(false);
   const [draft, setDraft] = useState<QuizDraft | null>(null);
-  // The selected document's job, as last set by this page; useGenerateQuizJob keeps it current.
-  const [trackedJob, setTrackedJob] = useState<GenerateQuizJob | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [starting, setStarting] = useState(false);
 
-  const job = useGenerateQuizJob(trackedJob, (finished) => {
-    void refresh();
-    if (finished.status === "succeeded") {
-      setTrackedJob(null);
-      if (finished.quizId !== null) void load(finished.quizId);
-      toast.success("Your quiz is ready.");
-    } else {
-      toast.error(finished.error ?? "The quiz couldn't be made.");
-    }
-  });
-
-  const jobActive = isJobActive(job);
-  const busy = uploadLoading || quizLoading;
+  const loaded = loadState.status === "loaded";
+  const busy = uploading || starting || quizLoading;
   const selected = documents.find((document) => document.id === selectedId) ?? null;
+  const job = selected === null ? null : jobOf(selected.id);
+  const jobActive = isJobActive(job);
+  // A succeeded job has nothing to show; its quiz is shown instead.
+  const jobToShow = job?.status === "succeeded" ? null : job;
 
   // The saved quiz in draft form, to start editing from and to detect unsaved edits.
   const saved = useMemo<QuizDraft | null>(
@@ -103,43 +88,69 @@ const Documents = () => {
     [setParams],
   );
 
-  // Loads the selected document's quiz and job whenever the selection changes.
-  const openDocument = useCallback(
-    async (document: Document | null) => {
-      setTrackedJob(document === null ? null : visibleJob(document));
-      if (document === null || document.quizId === null) {
-        clear();
-      } else {
-        await load(document.quizId);
-      }
-    },
-    [clear, load],
-  );
-
-  // On first render, load the user's documents.
+  // On first render, load the user's documents; the store keeps them current while mounted.
   useEffect(() => {
     clear();
-    void refresh().then(() => setLoaded(true));
-  }, [clear, refresh]);
+    return store.connect();
+  }, [clear, store]);
+
+  // A first load refused for a lost session goes back to sign-in.
+  useEffect(() => {
+    if (loadState.status === "failed" && loadState.error.kind === "not_signed_in") sessionLost();
+  }, [loadState, sessionLost]);
 
   // Open whatever the URL selects, once the list is here (and again when it changes).
   const selectedKey = selected?.id ?? null;
   useEffect(() => {
     if (!loaded) return;
-    void openDocument(documents.find((document) => document.id === selectedKey) ?? null);
+    const document = documents.find((candidate) => candidate.id === selectedKey) ?? null;
+    if (document === null || document.quizId === null) clear();
+    else void load(document.quizId);
     // Only a different selection should reload the quiz, not every list refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, selectedKey]);
 
-  // Keep other documents' progress current; the open one is followed by useGenerateQuizJob.
-  const othersActive = documents.some(
-    (document) => document.id !== selectedId && isJobActive(document.latestJob),
-  );
+  // Announce finished jobs, and show the new quiz if its document is open.
+  const selectedIdRef = useRef(selectedId);
   useEffect(() => {
-    if (!othersActive) return;
-    const timer = setInterval(() => void refresh(), LIST_POLL_MS);
-    return () => clearInterval(timer);
-  }, [othersActive, refresh]);
+    selectedIdRef.current = selectedId;
+  });
+  useEffect(
+    () =>
+      store.onJobFinished((finished) => {
+        if (finished.status === "succeeded") {
+          toast.success("Your quiz is ready.");
+          if (finished.documentId === selectedIdRef.current && finished.quizId !== null) {
+            void load(finished.quizId);
+          }
+        } else {
+          toast.error(finished.error ?? "The quiz couldn't be made.");
+        }
+      }),
+    [store, load],
+  );
+
+  // Tells the user why an upload or job start was refused.
+  const reportRequestError = (error: RequestError, fallback: string) => {
+    switch (error.kind) {
+      case "too_many_in_progress":
+        toast.error(error.message);
+        return;
+      case "not_found":
+        toast.error("This document no longer exists.");
+        void store.refresh();
+        return;
+      case "not_signed_in":
+        sessionLost();
+        return;
+      case "network":
+        toast.error("Couldn't reach the server. Check your connection.");
+        return;
+      default:
+        console.error(`${fallback}:`, error);
+        toast.error(fallback);
+    }
+  };
 
   const confirmDiscard = () => !dirty || window.confirm("You have unsaved changes. Discard them?");
 
@@ -153,13 +164,10 @@ const Documents = () => {
   };
 
   const handleStartJob = async (documentId: number) => {
-    const started = await startJob(documentId);
-    if (started === null) {
-      toast.error("Could not start writing the quiz.");
-      return;
-    }
-    setTrackedJob(started);
-    void refresh();
+    setStarting(true);
+    const result = await store.start(documentId);
+    setStarting(false);
+    if (!result.ok) reportRequestError(result.error, "Could not start writing the quiz.");
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -176,9 +184,11 @@ const Documents = () => {
     }
     if (!confirmDiscard()) return;
 
-    const result = await upload(file);
-    if (result instanceof Error) {
-      toast.error(result.message || "Failed to upload file.");
+    setUploading(true);
+    const result = await store.upload(file);
+    setUploading(false);
+    if (!result.ok) {
+      reportRequestError(result.error, "Failed to upload file.");
       return;
     }
     toast.success("File uploaded. Writing your quiz…");
@@ -236,7 +246,7 @@ const Documents = () => {
               disabled={busy}
               accept={ACCEPT}
             />
-            {uploadLoading ? (
+            {uploading ? (
               <Spinner data-icon="inline-start" />
             ) : (
               <RiUploadLine data-icon="inline-start" />
@@ -244,15 +254,27 @@ const Documents = () => {
             Upload
           </label>
         </header>
-        {!loaded ? (
+        {loadState.status === "loading" ? (
           <div className="flex flex-1 items-center justify-center">
             <Spinner className="size-5" aria-label="Loading documents" />
+          </div>
+        ) : loadState.status === "failed" ? (
+          <div role="alert" className="flex flex-col items-start gap-3 px-4 py-6">
+            <p className="text-sm text-muted-foreground">
+              {loadState.error.kind === "network"
+                ? "Couldn't reach the server. Check your connection."
+                : "Your documents couldn't be loaded."}
+            </p>
+            <Button size="sm" variant="secondary" onClick={() => void store.refresh()}>
+              <RiRefreshLine data-icon="inline-start" />
+              Retry
+            </Button>
           </div>
         ) : (
           <DocumentList
             documents={documents}
+            jobOf={jobOf}
             selectedId={selectedId}
-            selectedJob={job}
             onSelect={select}
             disabled={busy}
           />
@@ -354,18 +376,18 @@ const Documents = () => {
                 {quizError && (
                   <p className="text-sm text-destructive">Quiz error: {quizError.message}</p>
                 )}
-                {job !== null && (
+                {jobToShow !== null && (
                   <JobStatus
-                    job={job}
+                    job={jobToShow}
                     filename={selected.filename}
-                    retrying={quizLoading}
+                    retrying={starting}
                     onRetry={() => void handleStartJob(selected.id)}
                   />
                 )}
                 {jobActive ? null : draft !== null ? (
                   <QuizEditor draft={draft} onChange={setDraft} />
                 ) : (
-                  job === null &&
+                  jobToShow === null &&
                   !quizLoading && (
                     <div className="flex flex-col items-start gap-3">
                       <p className="text-sm text-muted-foreground">

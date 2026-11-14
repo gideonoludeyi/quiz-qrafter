@@ -19,4 +19,9 @@ export default defineConfig({
     strictPort: true,
     open: false,
   },
+  // Unit tests cover plain TypeScript modules, so they run in Node without a DOM.
+  test: {
+    include: ["src/**/*.test.ts"],
+    environment: "node",
+  },
 });

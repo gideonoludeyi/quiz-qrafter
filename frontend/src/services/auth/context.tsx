@@ -12,6 +12,8 @@ type AuthContextValue = {
   signUp: (email: string, password: string, fullname: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   signOut: () => void;
+  // Forgets the user without asking the server, after an API request answers 401.
+  sessionLost: () => void;
   // Both reject with the reason when the request fails.
   requestPasswordReset: (email: string, redirectTo: string) => Promise<void>;
   resetPassword: (token: string, newPassword: string) => Promise<void>;
@@ -97,6 +99,7 @@ export function AuthProvider({ service, children }: AuthProviderProps) {
         signUp,
         login,
         signOut,
+        sessionLost: () => setUser(null),
         requestPasswordReset: (email, redirectTo) =>
           service.requestPasswordReset(email, redirectTo),
         resetPassword: (token, newPassword) => service.resetPassword(token, newPassword),
