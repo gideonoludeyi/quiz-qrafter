@@ -42,6 +42,8 @@ export type EventFields = {
   "app.error.cause"?: string;
   // Whether retrying could fix the failure.
   "app.error.retriable"?: boolean;
+  // False for errors we didn't anticipate, which are likely bugs and carry a stack.
+  "app.error.expected"?: boolean;
 };
 
 // Fields of a child span, such as one AI call. OpenTelemetry's gen_ai names where they exist.

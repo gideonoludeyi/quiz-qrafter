@@ -52,7 +52,7 @@ describe("wide events", () => {
     ]);
   });
 
-  it("records a failure with its causes, and rethrows it", async () => {
+  it("records an expected failure with its causes, but no stack", async () => {
     const events = captureEvents();
     const refusal = new PermanentJobError("The AI declined to read this file.", {
       cause: new Error("Gemini finished with RECITATION"),
@@ -69,6 +69,21 @@ describe("wide events", () => {
       "error.type": "PermanentJobError",
       "exception.message": "The AI declined to read this file.",
       "app.error.cause": "Error: Gemini finished with RECITATION",
+      "app.error.expected": true,
+    });
+    expect(events.lines[0]).not.toHaveProperty("exception.stacktrace");
+  });
+
+  it("keeps the stack of an unexpected failure, which is likely a bug", async () => {
+    const events = captureEvents();
+    await withWideEvent("job.run", {}, async () => {
+      throw new TypeError("Cannot read properties of undefined (reading 'quiz')");
+    }).catch(() => {});
+    events.stop();
+
+    expect(events.lines[0]).toMatchObject({
+      "error.type": "TypeError",
+      "app.error.expected": false,
       "exception.stacktrace": expect.stringContaining("observability.test.ts"),
     });
   });

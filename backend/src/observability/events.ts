@@ -53,7 +53,8 @@ export function withWideEvent<T>(
       try {
         return await work();
       } catch (error) {
-        recordError(error);
+        // Unless the work already recorded it, with more context than this.
+        if (event.fields["error.type"] === undefined) recordError(error);
         throw error;
       } finally {
         finish(event);
@@ -113,6 +114,7 @@ export function annotate(fields: EventFields): void {
 }
 
 // Records why the current unit of work failed: the error, its causes, and whether a retry could help.
+// Only unexpected errors (likely bugs) carry a stack; expected ones are explained by type and message.
 export function recordError(error: unknown, retriable?: boolean): void {
   annotate({ ...errorFields(error), "app.error.retriable": retriable });
   current.getStore()?.span.setStatus({ code: SpanStatusCode.ERROR });
@@ -128,7 +130,7 @@ export function log(
 ): void {
   const record: Record<string, Scalar> = { level, message: redactText(message), ...fields };
   for (const [key, value] of Object.entries(error === undefined ? {} : errorFields(error))) {
-    if (value !== undefined) record[key] = redactText(value);
+    if (value !== undefined) record[key] = typeof value === "string" ? redactText(value) : value;
   }
   writeLine(format(record), done);
   logs.getLogger("quizqrafter").emit({
@@ -153,14 +155,27 @@ export function exitOnCrash(): void {
   process.on("uncaughtException", crash("Uncaught exception"));
 }
 
+// An error class marks itself expected with `expected = true`, as the provider errors do.
+function isExpected(error: Error): boolean {
+  return (error as { expected?: unknown }).expected === true;
+}
+
 function errorFields(
   error: unknown,
 ): Pick<
   EventFields,
-  "error.type" | "exception.message" | "exception.stacktrace" | "app.error.cause"
+  | "error.type"
+  | "exception.message"
+  | "exception.stacktrace"
+  | "app.error.cause"
+  | "app.error.expected"
 > {
   if (!(error instanceof Error))
-    return { "error.type": typeof error, "exception.message": String(error) };
+    return {
+      "error.type": typeof error,
+      "exception.message": String(error),
+      "app.error.expected": false,
+    };
   const causes: string[] = [];
   for (let cause = error.cause; cause !== undefined && causes.length < 5;) {
     causes.push(cause instanceof Error ? `${cause.name}: ${cause.message}` : JSON.stringify(cause));
@@ -169,7 +184,8 @@ function errorFields(
   return {
     "error.type": error.name,
     "exception.message": error.message,
-    "exception.stacktrace": error.stack,
+    "exception.stacktrace": isExpected(error) ? undefined : error.stack,
+    "app.error.expected": isExpected(error),
     "app.error.cause": causes.length > 0 ? causes.join(" ← ") : undefined,
   };
 }

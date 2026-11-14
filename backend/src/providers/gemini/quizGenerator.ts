@@ -6,6 +6,7 @@ import {
   QuizDraftSchema,
 } from "@quizqrafter/shared";
 import { annotate } from "../../observability/events";
+import { InvalidQuizError } from "../errors";
 import { countQuestionsWritten } from "../progress";
 import type { QuizGenerator } from "../types";
 import { streamText } from "./client";
@@ -144,7 +145,7 @@ export function salvageQuiz(raw: unknown): QuizDraft {
   const parsed = QuizDraftSchema.safeParse({ title, questions: kept });
   if (!parsed.success || kept.length === 0) {
     const problem = parsed.success ? "no usable questions" : parsed.error.message;
-    throw new Error(`The model returned an invalid quiz: ${problem}`);
+    throw new InvalidQuizError(problem);
   }
   return parsed.data;
 }

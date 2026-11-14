@@ -8,7 +8,7 @@ import {
 } from "@google/genai";
 import { annotate, withSpan } from "../../observability/events";
 import type { SpanFields } from "../../observability/fields";
-import { PermanentJobError } from "../errors";
+import { PermanentJobError, TransientProviderError } from "../errors";
 
 // Finish reasons that mean the model declined to answer.
 const DECLINED = new Set<FinishReason | undefined>([
@@ -23,13 +23,16 @@ export function createGeminiClient(apiKey: string) {
   return new GoogleGenAI({ apiKey });
 }
 
-// Converts request errors that a retry cannot fix into permanent job errors.
-// Rate limits (429), server errors and network errors are rethrown so the job is retried.
+// Classifies request errors: a retry can't fix 400s, but may fix rate limits and server errors.
+// Network errors are rethrown as they are, so they're retried and keep their stack.
 export function classifyGeminiError(error: unknown): unknown {
   if (error instanceof ApiError && [400, 401, 403, 404].includes(error.status)) {
     return new PermanentJobError("The AI service rejected this request. Please contact support.", {
       cause: error,
     });
+  }
+  if (error instanceof ApiError) {
+    return new TransientProviderError(`Gemini returned ${error.status}.`, { cause: error });
   }
   return error;
 }

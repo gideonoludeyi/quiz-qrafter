@@ -1,9 +1,10 @@
 import path from "node:path";
+import { ApiError } from "@google/genai";
 import PDFDocument from "pdfkit";
 import { describe, expect, it } from "vite-plus/test";
 import { loadConfig } from "../src/config";
-import { PermanentJobError } from "../src/providers/errors";
-import { RecitationError, streamText } from "../src/providers/gemini/client";
+import { PermanentJobError, TransientProviderError } from "../src/providers/errors";
+import { RecitationError, classifyGeminiError, streamText } from "../src/providers/gemini/client";
 import { salvageQuiz } from "../src/providers/gemini/quizGenerator";
 import { GeminiTextExtractor, filePartFor } from "../src/providers/gemini/textExtractor";
 import { withWideEvent } from "../src/observability/events";
@@ -233,6 +234,24 @@ describe("GeminiTextExtractor", () => {
     await expect(extractor.extract(await pdfWith(PAPER), "application/pdf")).rejects.toThrow(
       "The AI declined to read this file.",
     );
+  });
+});
+
+describe("classifyGeminiError", () => {
+  it("turns a rate limit or server error into an expected, retriable failure", () => {
+    const busy = new ApiError({ message: "high demand", status: 503 });
+    const classified = classifyGeminiError(busy);
+    expect(classified).toBeInstanceOf(TransientProviderError);
+    expect(classified).toMatchObject({
+      message: "Gemini returned 503.",
+      cause: busy,
+      expected: true,
+    });
+  });
+
+  it("leaves a network error as it is, keeping its stack", () => {
+    const offline = new TypeError("fetch failed");
+    expect(classifyGeminiError(offline)).toBe(offline);
   });
 });
 
