@@ -19,8 +19,6 @@ const EnvSchema = z.object({
   FRONTEND_URL: z.string().default("http://localhost:3000"),
   // Signs better-auth's session cookies and tokens. Required in production.
   BETTER_AUTH_SECRET: blankAsUnset(z.string().min(32).optional()),
-  // The public URL of this backend; reset links in emails point here.
-  BETTER_AUTH_URL: blankAsUnset(z.string().url().optional()),
   // How password reset emails go out: sent with Resend, or printed to the log.
   EMAIL: blankAsUnset(z.enum(["resend", "console"]).default("console")),
   RESEND_API_KEY: blankAsUnset(z.string().optional()),
@@ -107,7 +105,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       .filter(Boolean),
     auth: {
       secret: parsed.BETTER_AUTH_SECRET ?? "development-only-better-auth-secret-0123456789",
-      baseURL: parsed.BETTER_AUTH_URL ?? `http://localhost:${parsed.PORT}`,
     },
     email: emailConfig(parsed, isProduction),
     queue: {

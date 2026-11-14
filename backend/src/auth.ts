@@ -1,7 +1,6 @@
 import bcrypt from "bcrypt";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { dash } from "@better-auth/infra";
 import type { Config } from "./config";
 import type { Deps } from "./core/types";
 import { withWideEvent } from "./observability/events";
@@ -9,9 +8,7 @@ import { withWideEvent } from "./observability/events";
 // Configures better-auth: email and password sign-in, sessions in Postgres, password reset emails.
 export function createAuth(config: Config, { prisma, providers }: Deps) {
   return betterAuth({
-    plugins: [dash()],
     appName: "Quiz Qrafter",
-    baseURL: config.auth.baseURL,
     secret: config.auth.secret,
     trustedOrigins: config.frontendOrigins,
     database: prismaAdapter(prisma, { provider: "postgresql" }),
