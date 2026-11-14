@@ -11,7 +11,45 @@ common:
   loading: Loading…
 
 errors:
+  # Anything else the server failed with.
+  server: Something went wrong on our side. Please try again.
+  request:
+    # A request the API couldn't make sense of, such as a malformed body.
+    invalid: This request isn't valid.
+  response:
+    # The frontend got an answer it couldn't read.
+    invalid: The server's answer wasn't understood.
+  session:
+    ended: Your session has ended. Please sign in again.
+  notFound:
+    document: This document no longer exists.
+    quiz: This quiz no longer exists.
+    generateQuizJob: This quiz's progress can't be found. It may have been deleted.
+  upload:
+    noFile: No file was uploaded.
+    # maxMb is the upload size limit in megabytes.
+    tooLarge: Files can be at most {{maxMb}} MB.
+    unsupportedType: This file type isn't supported. Upload a PDF, image, Word or text file.
   jobs:
     # The per-user limit on GenerateQuizJobs in progress; count is the limit.
     tooManyActive_one: You can have at most {{count}} quiz in progress. Wait for it to finish.
     tooManyActive_other: You can have at most {{count}} quizzes in progress. Wait for one to finish.
+    # Why a GenerateQuizJob failed, as shown to the user.
+    generic: Something went wrong while making your quiz. Please try again.
+    notQueued: Your quiz couldn't be started. Please try again.
+    unreadableFileType: This file type can't be read. Upload a PDF, image, Word or text file.
+    noText: No text was found in this file.
+    wordFileUnreadable: This Word file could not be opened.
+    aiRejected: The AI service rejected this request. Please contact support.
+    aiDeclinedReading: The AI declined to read this file.
+    aiDeclinedWriting: The AI declined to write a quiz from this document.
+    quizCutOff: The quiz was cut off before it was complete. Try again, or upload a shorter document.
+    documentTooLong: This document is too long to read in full. Split it into smaller files and upload them separately.
+    # Only the offline fake AI (AI=fake) fails this way, on notes containing FAKE_FAIL.
+    fakeFailure: The fake AI was asked to fail.
+  # Failures a retry may fix. Users see errors.jobs.generic if the last retry fails too.
+  ai:
+    # status is the HTTP status the AI service answered with.
+    unavailable: The AI service answered with status {{status}}.
+    # problem says what was wrong, for the logs.
+    invalidQuiz: "The model returned an invalid quiz: {{problem}}"

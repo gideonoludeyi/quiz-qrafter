@@ -69,7 +69,7 @@ describe("running a job", () => {
       status: "succeeded",
       stage: null,
       questionsWritten: 2,
-      error: null,
+      errorCode: null,
       attempts: 1,
     });
     const document = await prisma.document.findUniqueOrThrow({
@@ -85,7 +85,7 @@ describe("running a job", () => {
     const flaky = failingWith(new Error("503 overloaded"));
     const { jobId } = await userWithDocument(flaky);
     await queue.deliver(flaky, jobId);
-    expect(await jobRow(jobId)).toMatchObject({ status: "queued", error: null });
+    expect(await jobRow(jobId)).toMatchObject({ status: "queued", errorCode: null });
     expect(await queue.stateOf(jobId)).toBe("waiting");
   });
 
@@ -97,18 +97,17 @@ describe("running a job", () => {
     const row = await jobRow(jobId);
     expect(row).toMatchObject({ status: "failed", attempts: MAX_RUNS });
     // The user sees a generic message, not the provider's error.
-    expect(row.error).toMatch(/something went wrong/i);
+    expect(row.errorCode).toBe("errors.jobs.generic");
   });
 
-  it("fails a permanent error at once with its message", async () => {
-    const refused = failingWith(
-      new PermanentJobError("The AI declined to write a quiz from this document."),
-    );
+  it("fails a permanent error at once with its code", async () => {
+    const refused = failingWith(new PermanentJobError("errors.jobs.aiDeclinedWriting"));
     const { jobId } = await userWithDocument(refused);
     await queue.deliver(refused, jobId);
     expect(await jobRow(jobId)).toMatchObject({
       status: "failed",
-      error: "The AI declined to write a quiz from this document.",
+      errorCode: "errors.jobs.aiDeclinedWriting",
+      errorValues: null,
     });
     expect(await queue.stateOf(jobId)).toBe("finished");
   });
@@ -120,11 +119,14 @@ describe("running a job", () => {
     await expect.poll(async () => (await jobRow(jobId)).stage).toBe("writing");
 
     // The old run stalled, and the run that took over failed for good.
-    await queue.deliver(failingWith(new PermanentJobError("Refused.")), jobId);
+    await queue.deliver(failingWith(new PermanentJobError("errors.jobs.aiDeclinedWriting")), jobId);
 
     old.release();
     await oldRun;
-    expect(await jobRow(jobId)).toMatchObject({ status: "failed", error: "Refused." });
+    expect(await jobRow(jobId)).toMatchObject({
+      status: "failed",
+      errorCode: "errors.jobs.aiDeclinedWriting",
+    });
     expect(await prisma.quiz.count({ where: { documentId } })).toBe(0);
   });
 
@@ -276,7 +278,7 @@ describe("starting jobs", () => {
     };
     const { jobId } = await userWithDocument(broken);
     expect(await jobRow(jobId)).toMatchObject({ status: "failed" });
-    expect((await jobRow(jobId)).error).toMatch(/couldn't be started/);
+    expect((await jobRow(jobId)).errorCode).toBe("errors.jobs.notQueued");
   });
 
   it("refuses to start a job for another user's document", async () => {

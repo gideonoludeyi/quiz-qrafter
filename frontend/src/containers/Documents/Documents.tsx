@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { describeError } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { useAuth } from "../../services/auth";
 import { useDocumentAPI, useDocuments } from "../../services/document/context";
@@ -124,7 +125,7 @@ const Documents = () => {
             void load(finished.quizId);
           }
         } else {
-          toast.error(finished.error ?? "The quiz couldn't be made.");
+          toast.error(describeError(finished.error) ?? "The quiz couldn't be made.");
         }
       }),
     [store, load],

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AppErrorSchema } from "./errors";
 
 export const JOB_STATUSES = ["queued", "running", "succeeded", "failed"] as const;
 export const JOB_STAGES = ["reading", "writing"] as const;
@@ -10,8 +11,8 @@ export const GenerateQuizJobSchema = z.object({
   // Which part of the work is running; null while queued and once finished.
   stage: z.enum(JOB_STAGES).nullable(),
   questionsWritten: z.number().int(),
-  // A message safe to show the user, set when the job fails.
-  error: z.string().nullable(),
+  // Why the job failed, set when it does.
+  error: AppErrorSchema.nullable(),
   // Set once the job has succeeded.
   quizId: z.number().int().nullable(),
   createdAt: z.string(),

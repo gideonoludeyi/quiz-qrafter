@@ -4,6 +4,7 @@ import PDFDocument from "pdfkit";
 import { describe, expect, it } from "vite-plus/test";
 import { loadConfig } from "../src/config";
 import {
+  InvalidQuizError,
   PermanentJobError,
   RecitationError,
   TransientProviderError,
@@ -177,7 +178,11 @@ describe("loadConfig", () => {
 });
 
 describe("streamText", () => {
-  const outcome = { task: "read this file", tooLong: "Too long." };
+  const outcome = {
+    task: "read this file",
+    declined: "errors.jobs.aiDeclinedReading",
+    tooLong: "errors.jobs.documentTooLong",
+  };
 
   it("shows the user a plain refusal and keeps Gemini's reason for the logs", async () => {
     const ai = geminiStreaming(
@@ -193,7 +198,7 @@ describe("streamText", () => {
     );
     const error = await streamText(ai, { model: "m", contents: [] }, outcome).catch((e) => e);
     expect(error).toBeInstanceOf(PermanentJobError);
-    expect(error.message).toBe("The AI declined to read this file.");
+    expect(error.code).toBe("errors.jobs.aiDeclinedReading");
     expect(error.cause.message).toMatch(/finished with RECITATION; safety ratings: .*HARASSMENT/);
   });
 
@@ -225,7 +230,7 @@ describe("streamText", () => {
   it("keeps the reason when Gemini blocks the prompt", async () => {
     const ai = geminiStreaming({ promptFeedback: { blockReason: "OTHER" } });
     const error = await streamText(ai, { model: "m", contents: [] }, outcome).catch((e) => e);
-    expect(error.message).toBe("The AI declined to read this file.");
+    expect(error.code).toBe("errors.jobs.aiDeclinedReading");
     expect(error.cause.message).toBe("Gemini prompt blocked: OTHER");
   });
 });
@@ -257,7 +262,7 @@ describe("readDocument", () => {
       },
     };
   };
-  const recitation = () => new RecitationError("The AI declined to read this file.");
+  const recitation = () => new RecitationError("errors.jobs.aiDeclinedReading");
 
   it("reads text and Word files itself, without the Transcriber", async () => {
     const ai = transcriber({ text: "unused" });
@@ -282,12 +287,12 @@ describe("readDocument", () => {
 
   it("refuses other file types, and files with no text, permanently", async () => {
     const ai = transcriber({ text: "   " });
-    await expect(readDocument(ai, Buffer.from(""), "application/zip")).rejects.toThrow(
-      "This file type can't be read.",
-    );
-    await expect(readDocument(ai, Buffer.from("%PDF"), "application/pdf")).rejects.toThrow(
-      "No text was found in this file.",
-    );
+    await expect(readDocument(ai, Buffer.from(""), "application/zip")).rejects.toMatchObject({
+      code: "errors.jobs.unreadableFileType",
+    });
+    await expect(readDocument(ai, Buffer.from("%PDF"), "application/pdf")).rejects.toMatchObject({
+      code: "errors.jobs.noText",
+    });
   });
 
   it("reads a PDF's own text when the AI won't copy it", async () => {
@@ -307,7 +312,7 @@ describe("readDocument", () => {
   });
 
   it("keeps any other refusal, even for a PDF with text", async () => {
-    const refusal = new PermanentJobError("The AI declined to read this file.");
+    const refusal = new PermanentJobError("errors.jobs.aiDeclinedReading");
     await expect(
       readDocument(transcriber({ error: refusal }), await pdfWith(PAPER), "application/pdf"),
     ).rejects.toBe(refusal);
@@ -329,7 +334,8 @@ describe("classifyGeminiError", () => {
     const classified = classifyGeminiError(busy);
     expect(classified).toBeInstanceOf(TransientProviderError);
     expect(classified).toMatchObject({
-      message: "Gemini returned 503.",
+      code: "errors.ai.unavailable",
+      values: { status: 503 },
       cause: busy,
       expected: true,
     });
@@ -381,8 +387,11 @@ describe("salvageQuiz", () => {
 
   it("fails, so the Run is retried, when no question is usable", () => {
     expect(() => salvageQuiz({ title: "Cells", questions: [choiceQuestion(["", ""], 0)] })).toThrow(
-      "The model returned an invalid quiz: no usable questions",
+      expect.objectContaining({
+        code: "errors.ai.invalidQuiz",
+        values: { problem: "no usable questions" },
+      }),
     );
-    expect(() => salvageQuiz({ questions: [] })).toThrow("The model returned an invalid quiz");
+    expect(() => salvageQuiz({ questions: [] })).toThrow(InvalidQuizError);
   });
 });

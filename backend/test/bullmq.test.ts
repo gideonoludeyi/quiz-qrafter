@@ -148,7 +148,7 @@ describe("the BullMQ worker", () => {
     let calls = 0;
     const refused = depsWith(queue, async () => {
       calls++;
-      throw new PermanentJobError("Refused.");
+      throw new PermanentJobError("errors.jobs.aiDeclinedWriting");
     });
     await startTestWorker(refused);
     const { jobId } = await userWithDocument(refused);

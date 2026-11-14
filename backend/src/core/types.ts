@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { CodedError } from "../providers/errors";
 import type { Providers } from "../providers/types";
 
 // Where a GenerateQuizJob's queue message is: still to be run, finished with, or never sent.
@@ -21,26 +22,25 @@ export type Deps = {
   providers: Providers;
 };
 
-// Thrown when a record does not exist or belongs to another user.
-export class NotFoundError extends Error {
-  constructor(what: string) {
-    super(`${what} not found`);
-    this.name = "NotFoundError";
-  }
+// Thrown when a record does not exist or belongs to another user. `code` names what is missing.
+export class NotFoundError extends CodedError {
+  override name = "NotFoundError";
 }
 
 // Thrown when a user already has the maximum number of GenerateQuizJobs in progress.
-export class TooManyJobsError extends Error {
+export class TooManyJobsError extends CodedError {
+  override name = "TooManyJobsError";
+
   constructor(limit: number) {
-    super(`You can have at most ${limit} quizzes in progress. Wait for one to finish.`);
-    this.name = "TooManyJobsError";
+    super("errors.jobs.tooManyActive", { values: { count: limit } });
   }
 }
 
 // Thrown when an upload is not a file type the app can read.
-export class UnsupportedFileError extends Error {
+export class UnsupportedFileError extends CodedError {
+  override name = "UnsupportedFileError";
+
   constructor() {
-    super("This file type isn't supported. Upload a PDF, image, Word or text file.");
-    this.name = "UnsupportedFileError";
+    super("errors.upload.unsupportedType");
   }
 }

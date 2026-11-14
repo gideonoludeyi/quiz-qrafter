@@ -21,7 +21,7 @@ function job(
     status,
     stage: status === "running" ? "writing" : null,
     questionsWritten: 0,
-    error: status === "failed" ? "It failed." : null,
+    error: status === "failed" ? { code: "errors.jobs.generic" } : null,
     quizId: status === "succeeded" ? id * 100 : null,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt,
@@ -299,14 +299,14 @@ describe("onJobFinished", () => {
 });
 
 describe("start and upload", () => {
-  it("returns the server's message when too many quizzes are in progress", async () => {
+  it("returns the server's reason when too many quizzes are in progress", async () => {
     const { service, store } = setup([doc(1)]);
     await advance();
-    const message = "You already have 3 quizzes in progress.";
-    service.startJob.mockResolvedValueOnce(fail({ kind: "too_many_in_progress", message }));
+    const reason = { code: "errors.jobs.tooManyActive", values: { count: 3 } };
+    service.startJob.mockResolvedValueOnce(fail({ kind: "too_many_in_progress", reason }));
     expect(await store.start(1)).toEqual({
       ok: false,
-      error: { kind: "too_many_in_progress", message },
+      error: { kind: "too_many_in_progress", reason },
     });
     expect(store.jobOf(1)).toBeNull();
   });
@@ -378,7 +378,7 @@ describe("regressions", () => {
   it("bug 4: failing requests aren't retried endlessly at a fixed pace", async () => {
     const { service } = setup([doc(1, job(5, 1, "running"))]);
     await advance();
-    service.list.mockResolvedValue(fail({ kind: "http", status: 500, message: null }));
+    service.list.mockResolvedValue(fail({ kind: "http", status: 500, reason: null }));
     await advance(5 * 60_000);
     // After 2, 4, 8 and 16 s, then every 30 s: 13 polls in five minutes, not 200.
     expect(service.list).toHaveBeenCalledTimes(1 + 13);

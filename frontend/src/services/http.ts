@@ -1,10 +1,13 @@
-// Why a request failed, in terms the UI can act on.
+import { ApiErrorResponseSchema, type AppError } from "@quizqrafter/shared";
+import { describeError } from "@/i18n";
+
+// Why a request failed, in terms the UI can act on. `reason` is the server's error code, if it sent one.
 export type RequestError =
-  | { kind: "too_many_in_progress"; message: string }
+  | { kind: "too_many_in_progress"; reason: AppError | null }
   | { kind: "not_signed_in" }
-  | { kind: "not_found"; message: string | null }
+  | { kind: "not_found"; reason: AppError | null }
   | { kind: "network"; cause: unknown }
-  | { kind: "http"; status: number; message: string | null };
+  | { kind: "http"; status: number; reason: AppError | null };
 
 export type RequestResult<T> = { ok: true; value: T } | { ok: false; error: RequestError };
 
@@ -16,10 +19,12 @@ type RequestOptions = {
   form?: FormData;
 };
 
-// The server's `{ error }` message, if the body has one.
-async function serverMessage(response: Response): Promise<string | null> {
-  const body = await response.json().catch(() => null);
-  return typeof body?.error === "string" ? body.error : null;
+// The server's error code and values, if the body has them.
+async function serverReason(response: Response): Promise<AppError | null> {
+  const parsed = ApiErrorResponseSchema.safeParse(await response.json().catch(() => null));
+  if (!parsed.success) return null;
+  const { code, values } = parsed.data.error;
+  return values === undefined ? { code } : { code, values };
 }
 
 // How to read a successful response's body, and which type to ask for.
@@ -60,22 +65,16 @@ export async function request<T>(
   }
 
   if (!response.ok) {
-    const message = await serverMessage(response);
+    const reason = await serverReason(response);
     switch (response.status) {
       case 401:
         return { ok: false, error: { kind: "not_signed_in" } };
       case 404:
-        return { ok: false, error: { kind: "not_found", message } };
+        return { ok: false, error: { kind: "not_found", reason } };
       case 429:
-        return {
-          ok: false,
-          error: {
-            kind: "too_many_in_progress",
-            message: message ?? "Too many quizzes in progress.",
-          },
-        };
+        return { ok: false, error: { kind: "too_many_in_progress", reason } };
       default:
-        return { ok: false, error: { kind: "http", status: response.status, message } };
+        return { ok: false, error: { kind: "http", status: response.status, reason } };
     }
   }
 
@@ -84,11 +83,7 @@ export async function request<T>(
   } catch {
     return {
       ok: false,
-      error: {
-        kind: "http",
-        status: response.status,
-        message: "The server's answer wasn't understood.",
-      },
+      error: { kind: "http", status: response.status, reason: { code: "errors.response.invalid" } },
     };
   }
 }
@@ -96,14 +91,12 @@ export async function request<T>(
 // What to tell the user about a failed request; `fallback` describes what was being done.
 export function describeRequestError(error: RequestError, fallback: string): string {
   switch (error.kind) {
-    case "too_many_in_progress":
-      return error.message;
     case "not_signed_in":
       return "Your session has ended. Please sign in again.";
     case "network":
       return "Couldn't reach the server. Check your connection.";
     default:
-      return error.message ?? fallback;
+      return describeError(error.reason) ?? fallback;
   }
 }
 

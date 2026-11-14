@@ -9,7 +9,7 @@ import {
 } from "../../core/documents";
 import type { Deps } from "../../core/types";
 import type { AppEnv } from "./env";
-import { fileTooLarge, parseId, restrict, userIdOf } from "./http";
+import { fileTooLarge, parseId, restrict, sendError, userIdOf } from "./http";
 
 // Room for the multipart framing around a file that is exactly at the size limit.
 const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
@@ -23,7 +23,7 @@ export default function documentRouter(deps: Deps) {
     bodyLimit({ maxSize: MAX_UPLOAD_BYTES + MULTIPART_OVERHEAD_BYTES, onError: fileTooLarge }),
     async (c) => {
       const { file } = await c.req.parseBody();
-      if (!(file instanceof File)) return c.json({ error: "No file uploaded" }, 400);
+      if (!(file instanceof File)) return sendError(c, 400, "errors.upload.noFile");
       if (file.size > MAX_UPLOAD_BYTES) return fileTooLarge(c);
 
       const result = await uploadDocument(deps, userIdOf(c), {

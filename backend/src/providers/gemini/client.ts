@@ -27,30 +27,30 @@ export function createGeminiClient(apiKey: string) {
 // Network errors are rethrown as they are, so they're retried and keep their stack.
 export function classifyGeminiError(error: unknown): unknown {
   if (error instanceof ApiError && [400, 401, 403, 404].includes(error.status)) {
-    return new PermanentJobError("The AI service rejected this request. Please contact support.", {
-      cause: error,
-    });
+    return new PermanentJobError("errors.jobs.aiRejected", { cause: error });
   }
   if (error instanceof ApiError) {
-    return new TransientProviderError(`Gemini returned ${error.status}.`, { cause: error });
+    return new TransientProviderError("errors.ai.unavailable", {
+      values: { status: error.status },
+      cause: error,
+    });
   }
   return error;
 }
 
 // A refusal shown to the user plainly; the cause records Gemini's reason, for the logs.
-function declined(
-  task: string,
+function refusal(
+  code: string,
   reason: string,
   safetyRatings?: SafetyRating[],
   ErrorType = PermanentJobError,
 ) {
   const ratings = safetyRatings?.length ? `; safety ratings: ${JSON.stringify(safetyRatings)}` : "";
-  return new ErrorType(`The AI declined to ${task}.`, {
-    cause: new Error(`Gemini ${reason}${ratings}`),
-  });
+  return new ErrorType(code, { cause: new Error(`Gemini ${reason}${ratings}`) });
 }
 
-type Outcome = { task: string; tooLong: string };
+// `task` names the work in events; `declined` and `tooLong` are the error codes users see.
+type Outcome = { task: string; declined: string; tooLong: string };
 
 // Streams a response, calling `onText` with the text so far, and returns the full text.
 // Fails permanently if the model declined or ran out of output tokens.
@@ -75,7 +75,7 @@ export function streamText(
 async function streamAndCheck(
   ai: GoogleGenAI,
   params: GenerateContentParameters,
-  { task, tooLong }: Outcome,
+  { declined, tooLong }: Outcome,
   set: (fields: SpanFields) => void,
   onText?: (textSoFar: string) => void,
 ): Promise<string> {
@@ -87,7 +87,7 @@ async function streamAndCheck(
       const feedback = chunk.promptFeedback;
       if (feedback?.blockReason) {
         annotate({ "app.ai.finish_reason": `BLOCKED_${feedback.blockReason}` });
-        throw declined(task, `prompt blocked: ${feedback.blockReason}`, feedback.safetyRatings);
+        throw refusal(declined, `prompt blocked: ${feedback.blockReason}`, feedback.safetyRatings);
       }
       const piece = chunk.text;
       if (piece) {
@@ -113,7 +113,7 @@ async function streamAndCheck(
   if (DECLINED.has(finishReason)) {
     const ErrorType =
       finishReason === FinishReason.RECITATION ? RecitationError : PermanentJobError;
-    throw declined(task, `finished with ${finishReason}`, candidate?.safetyRatings, ErrorType);
+    throw refusal(declined, `finished with ${finishReason}`, candidate?.safetyRatings, ErrorType);
   }
   if (finishReason === FinishReason.MAX_TOKENS) throw new PermanentJobError(tooLong);
   return text;

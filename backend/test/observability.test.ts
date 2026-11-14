@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 import { annotate, withSpan, withWideEvent } from "../src/observability/events";
 import { redactText } from "../src/observability/redact";
+import { t } from "../src/i18n";
 import { PermanentJobError } from "../src/providers/errors";
 import { captureEvents, startTestTracing } from "./fixtures";
 
@@ -54,7 +55,7 @@ describe("wide events", () => {
 
   it("records an expected failure with its causes, but no stack", async () => {
     const events = captureEvents();
-    const refusal = new PermanentJobError("The AI declined to read this file.", {
+    const refusal = new PermanentJobError("errors.jobs.aiDeclinedReading", {
       cause: new Error("Gemini finished with RECITATION"),
     });
     await expect(
@@ -67,7 +68,8 @@ describe("wide events", () => {
     expect(events.lines[0]).toMatchObject({
       level: "error",
       "error.type": "PermanentJobError",
-      "exception.message": "The AI declined to read this file.",
+      // The English from the catalogue, so events read well.
+      "exception.message": t("errors.jobs.aiDeclinedReading"),
       "app.error.cause": "Error: Gemini finished with RECITATION",
       "app.error.expected": true,
     });

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { t } from "@/i18n";
 import { asBlob, asJson, asText, describeRequestError, noBody, request } from "./http";
 
 const URL_ = new URL("http://api.test/api/v1/jobs");
@@ -32,29 +33,30 @@ describe("request", () => {
     );
   });
 
-  it("carries the server's message when too many quizzes are in progress", async () => {
-    respond(429, { error: "You already have 3 quizzes in progress." });
+  it("carries the server's reason when too many quizzes are in progress", async () => {
+    const reason = { code: "errors.jobs.tooManyActive", values: { count: 3 } };
+    respond(429, { error: { ...reason, message: "At most 3." } });
     expect(await request(URL_, schema)).toEqual({
       ok: false,
-      error: { kind: "too_many_in_progress", message: "You already have 3 quizzes in progress." },
+      error: { kind: "too_many_in_progress", reason },
     });
   });
 
   it("maps 401 and 404", async () => {
-    respond(401, { error: "Unauthorized" });
+    respond(401, { error: { code: "errors.session.ended", message: "Signed out." } });
     expect(await request(URL_, schema)).toEqual({ ok: false, error: { kind: "not_signed_in" } });
-    respond(404, { error: "Document not found" });
+    respond(404, { error: { code: "errors.notFound.document", message: "Not found." } });
     expect(await request(URL_, schema)).toEqual({
       ok: false,
-      error: { kind: "not_found", message: "Document not found" },
+      error: { kind: "not_found", reason: { code: "errors.notFound.document" } },
     });
   });
 
-  it("maps other statuses to an HTTP error with the server's message, if any", async () => {
+  it("maps other statuses to an HTTP error with the server's reason, if any", async () => {
     respond(500, "oops");
     expect(await request(URL_, schema)).toEqual({
       ok: false,
-      error: { kind: "http", status: 500, message: null },
+      error: { kind: "http", status: 500, reason: null },
     });
   });
 
@@ -76,7 +78,10 @@ describe("request", () => {
       },
     };
     const result = await request(URL_, asJson(strict));
-    expect(result).toMatchObject({ ok: false, error: { kind: "http", status: 200 } });
+    expect(result).toMatchObject({
+      ok: false,
+      error: { kind: "http", status: 200, reason: { code: "errors.response.invalid" } },
+    });
   });
 
   it("reads a file, text or nothing, asking for the matching type", async () => {
@@ -105,17 +110,24 @@ describe("request", () => {
 describe("describeRequestError", () => {
   it("says what went wrong in words for the user", () => {
     const fallback = "The quiz couldn't be saved.";
-    expect(
-      describeRequestError({ kind: "too_many_in_progress", message: "At most 3." }, fallback),
-    ).toBe("At most 3.");
+    const tooMany = { code: "errors.jobs.tooManyActive", values: { count: 3 } };
+    expect(describeRequestError({ kind: "too_many_in_progress", reason: tooMany }, fallback)).toBe(
+      t("errors.jobs.tooManyActive", { count: 3 }),
+    );
     expect(describeRequestError({ kind: "not_signed_in" }, fallback)).toMatch(/session has ended/);
     expect(describeRequestError({ kind: "network", cause: null }, fallback)).toMatch(
       /reach the server/,
     );
-    expect(describeRequestError({ kind: "not_found", message: "Quiz not found" }, fallback)).toBe(
-      "Quiz not found",
+    const gone = { code: "errors.notFound.quiz" };
+    expect(describeRequestError({ kind: "not_found", reason: gone }, fallback)).toBe(
+      t("errors.notFound.quiz"),
     );
-    expect(describeRequestError({ kind: "http", status: 500, message: null }, fallback)).toBe(
+    expect(describeRequestError({ kind: "http", status: 500, reason: null }, fallback)).toBe(
+      fallback,
+    );
+    // A code this build doesn't know, e.g. from a newer server, falls back too.
+    const unknown = { code: ["errors", "fromTheFuture"].join(".") };
+    expect(describeRequestError({ kind: "http", status: 500, reason: unknown }, fallback)).toBe(
       fallback,
     );
   });

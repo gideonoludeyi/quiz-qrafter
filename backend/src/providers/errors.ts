@@ -1,13 +1,34 @@
-// Errors here are expected: their type and message explain them, so events record them without a stack.
+import type { AppError, TranslationValues } from "@quizqrafter/shared";
+import { t } from "../i18n";
 
-// A failure that retrying cannot fix. Its message is shown to the user, so keep it plain.
-export class PermanentJobError extends Error {
-  readonly expected = true;
+type CodedErrorOptions = { values?: TranslationValues; cause?: unknown };
 
-  constructor(userMessage: string, options?: { cause?: unknown }) {
-    super(userMessage, options);
-    this.name = "PermanentJobError";
+// An error named by a catalogue code under errors.*. Its message is the English, for logs.
+export class CodedError extends Error {
+  readonly code: string;
+  readonly values?: TranslationValues;
+
+  constructor(code: string, { values, cause }: CodedErrorOptions = {}) {
+    super(t(code, values), { cause });
+    this.name = "CodedError";
+    this.code = code;
+    this.values = values;
   }
+
+  // The code and values, for the frontend to word.
+  toAppError(): AppError {
+    return this.values === undefined
+      ? { code: this.code }
+      : { code: this.code, values: this.values };
+  }
+}
+
+// The errors below are expected: their type and message explain them, so events record them without a stack.
+
+// A failure that retrying cannot fix. Its code is shown to the user, so its message should be plain.
+export class PermanentJobError extends CodedError {
+  readonly expected = true;
+  override name = "PermanentJobError";
 }
 
 // The AI wouldn't answer because its answer matched published text, e.g. when asked to copy a paper.
@@ -16,21 +37,17 @@ export class RecitationError extends PermanentJobError {
 }
 
 // A provider failure that a retry may fix, such as a rate limit or a 503. The cause has the details.
-export class TransientProviderError extends Error {
+export class TransientProviderError extends CodedError {
   readonly expected = true;
-
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
-    this.name = "TransientProviderError";
-  }
+  override name = "TransientProviderError";
 }
 
 // The model's quiz had no usable question. Writing it again usually works.
-export class InvalidQuizError extends Error {
+export class InvalidQuizError extends CodedError {
   readonly expected = true;
+  override name = "InvalidQuizError";
 
   constructor(problem: string) {
-    super(`The model returned an invalid quiz: ${problem}`);
-    this.name = "InvalidQuizError";
+    super("errors.ai.invalidQuiz", { values: { problem } });
   }
 }

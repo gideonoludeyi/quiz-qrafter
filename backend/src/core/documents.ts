@@ -88,7 +88,7 @@ export async function getDocumentFile(
   id: number,
 ): Promise<{ filename: string; mimeType: string; content: Buffer }> {
   const row = await prisma.document.findFirst({ where: { id, userId } });
-  if (row === null) throw new NotFoundError("Document");
+  if (row === null) throw new NotFoundError("errors.notFound.document");
   const content = await providers.blobs.get(row.rawURL);
   return { filename: row.filename, mimeType: row.mimeType, content };
 }

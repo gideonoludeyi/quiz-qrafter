@@ -108,8 +108,8 @@ export class GeminiQuizGenerator implements QuizGenerator {
       },
       {
         task: "write a quiz from this document",
-        tooLong:
-          "The quiz was cut off before it was complete. Try again, or upload a shorter document.",
+        declined: "errors.jobs.aiDeclinedWriting",
+        tooLong: "errors.jobs.quizCutOff",
       },
       (textSoFar) => {
         const count = countQuestionsWritten(textSoFar);

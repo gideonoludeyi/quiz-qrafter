@@ -37,8 +37,8 @@ export class GeminiTranscriber implements Transcriber {
       },
       {
         task: "read this file",
-        tooLong:
-          "This document is too long to read in full. Split it into smaller files and upload them separately.",
+        declined: "errors.jobs.aiDeclinedReading",
+        tooLong: "errors.jobs.documentTooLong",
       },
     );
   }

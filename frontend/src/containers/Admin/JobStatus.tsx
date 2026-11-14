@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
+import { describeError } from "@/i18n";
 
 // The prompt asks for about 10 questions; the bar only needs a rough scale.
 const EXPECTED_QUESTIONS = 10;
@@ -55,7 +56,7 @@ const JobStatus = ({
             <RiErrorWarningLine className="size-5 text-destructive" />
             The quiz for {filename} couldn't be made
           </CardTitle>
-          <CardDescription>{job.error ?? "Something went wrong."}</CardDescription>
+          <CardDescription>{describeError(job.error) ?? "Something went wrong."}</CardDescription>
         </CardHeader>
         <CardFooter>
           <Button onClick={onRetry} disabled={retrying}>

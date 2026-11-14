@@ -155,8 +155,9 @@ model GenerateQuizJob {
     questionsWritten Int       @default(0)
     // The BullMQ run that owns this job; writes from older runs are ignored.
     attempts         Int       @default(0)
-    // A message safe to show the user.
-    error            String?
+    // Why the job failed: a catalogue key under errors.*, and the values its message needs.
+    errorCode        String?
+    errorValues      Json?
     createdAt        DateTime  @default(now())
     updatedAt        DateTime  @updatedAt
     finishedAt       DateTime?

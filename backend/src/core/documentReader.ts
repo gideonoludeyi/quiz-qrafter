@@ -31,11 +31,9 @@ export async function readDocument(
     annotate({ "app.document.read_from": "ai" });
     text = await transcribe(transcriber, content, mimeType);
   } else {
-    throw new PermanentJobError(
-      "This file type can't be read. Upload a PDF, image, Word or text file.",
-    );
+    throw new PermanentJobError("errors.jobs.unreadableFileType");
   }
-  if (!text.trim()) throw new PermanentJobError("No text was found in this file.");
+  if (!text.trim()) throw new PermanentJobError("errors.jobs.noText");
   return text;
 }
 
@@ -48,7 +46,7 @@ export async function readLocally(content: Buffer, mimeType: string): Promise<st
     try {
       return (await mammoth.extractRawText({ buffer: content })).value;
     } catch (error) {
-      throw new PermanentJobError("This Word file could not be opened.", { cause: error });
+      throw new PermanentJobError("errors.jobs.wordFileUnreadable", { cause: error });
     }
   }
   return null;

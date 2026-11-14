@@ -4,7 +4,7 @@ import {
   type JobStage,
   type GenerateQuizJob as JobRow,
 } from "@prisma/client";
-import type { GenerateQuizJob } from "@quizqrafter/shared";
+import { type AppError, AppErrorSchema, type GenerateQuizJob } from "@quizqrafter/shared";
 import { annotate, recordError, withWideEvent } from "../observability/events";
 import { PermanentJobError } from "../providers/errors";
 import { readDocument } from "./documentReader";
@@ -21,8 +21,9 @@ const PROGRESS_INTERVAL_MS = 1_000;
 // Namespaces the per-user advisory lock taken while starting jobs.
 const START_LOCK = 7101;
 
-const GENERIC_FAILURE = "Something went wrong while making your quiz. Please try again.";
-const NOT_QUEUED = "Your quiz couldn't be started. Please try again.";
+// Error codes for failures users can't act on beyond trying again.
+const GENERIC_FAILURE = { errorCode: "errors.jobs.generic", errorValues: Prisma.DbNull };
+const NOT_QUEUED = { errorCode: "errors.jobs.notQueued", errorValues: Prisma.DbNull };
 const ACTIVE: JobRow["status"][] = ["queued", "running"];
 
 type Db = Prisma.TransactionClient;
@@ -35,11 +36,17 @@ export function toGenerateQuizJob(row: JobRow, documentQuizId: number | null): G
     status: row.status,
     stage: row.stage,
     questionsWritten: row.questionsWritten,
-    error: row.error,
+    error: row.errorCode === null ? null : toAppError(row.errorCode, row.errorValues),
     quizId: row.status === "succeeded" ? documentQuizId : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+// A stored error code and its values, in the shared shape.
+function toAppError(code: string, values: Prisma.JsonValue): AppError {
+  const parsed = AppErrorSchema.shape.values.safeParse(values ?? undefined);
+  return parsed.success && parsed.data !== undefined ? { code, values: parsed.data } : { code };
 }
 
 const withDocumentQuiz = { document: { select: { quiz: { select: { id: true } } } } } as const;
@@ -73,7 +80,7 @@ export async function startGenerateQuizJob(
 
     if (typeof target === "number") {
       const document = await tx.document.findFirst({ where: { id: target, userId } });
-      if (document === null) throw new NotFoundError("Document");
+      if (document === null) throw new NotFoundError("errors.notFound.document");
       const existing = await tx.generateQuizJob.findFirst({
         where: { documentId: target, status: { in: ACTIVE } },
         include: withDocumentQuiz,
@@ -109,7 +116,7 @@ export async function startGenerateQuizJob(
     recordError(error, true);
     const failed = await prisma.generateQuizJob.update({
       where: { id: row.id },
-      data: { status: "failed", error: NOT_QUEUED, finishedAt: new Date() },
+      data: { status: "failed", ...NOT_QUEUED, finishedAt: new Date() },
       include: withDocumentQuiz,
     });
     return toGenerateQuizJobWithQuiz(failed);
@@ -126,7 +133,7 @@ export async function getGenerateQuizJob(
     where: { id: jobId, document: { userId } },
     include: withDocumentQuiz,
   });
-  if (row === null) throw new NotFoundError("Job");
+  if (row === null) throw new NotFoundError("errors.notFound.generateQuizJob");
   return toGenerateQuizJobWithQuiz(row);
 }
 
@@ -222,7 +229,8 @@ async function runGenerateQuizJob(
           status: "succeeded",
           stage: null,
           questionsWritten: draft.questions.length,
-          error: null,
+          errorCode: null,
+          errorValues: Prisma.DbNull,
           finishedAt: new Date(),
         },
       });
@@ -241,14 +249,15 @@ async function runGenerateQuizJob(
     recordError(error, !permanent);
     annotate({ "app.job.outcome": permanent || final ? "failed" : "retrying" });
     if (permanent) {
-      await write({ status: "failed", stage: null, error: error.message, finishedAt: new Date() });
-    } else if (final) {
       await write({
         status: "failed",
         stage: null,
-        error: GENERIC_FAILURE,
+        errorCode: error.code,
+        errorValues: error.values ?? Prisma.DbNull,
         finishedAt: new Date(),
       });
+    } else if (final) {
+      await write({ status: "failed", stage: null, ...GENERIC_FAILURE, finishedAt: new Date() });
     } else {
       // Shown as waiting while the queue holds the retry back.
       await write({ status: "queued", stage: null });
@@ -268,7 +277,7 @@ export function giveUpGenerateQuizJob(
     async () => {
       const { count } = await prisma.generateQuizJob.updateMany({
         where: { id: jobId, status: { in: ACTIVE } },
-        data: { status: "failed", stage: null, error: GENERIC_FAILURE, finishedAt: new Date() },
+        data: { status: "failed", stage: null, ...GENERIC_FAILURE, finishedAt: new Date() },
       });
       annotate({ "app.job.outcome": count > 0 ? "failed" : "skipped" });
     },

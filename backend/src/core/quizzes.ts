@@ -53,7 +53,7 @@ async function findOwnedQuiz({ prisma }: Deps, userId: number, quizId: number): 
     where: { id: quizId, document: { userId } },
     include: withQuestions,
   });
-  if (row === null) throw new NotFoundError("Quiz");
+  if (row === null) throw new NotFoundError("errors.notFound.quiz");
   return row;
 }
 

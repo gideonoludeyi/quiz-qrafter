@@ -5,6 +5,7 @@ import { createAdaptorServer } from "@hono/node-server";
 import bcrypt from "bcrypt";
 import { PrismaClient } from "@prisma/client";
 import {
+  ApiErrorResponseSchema,
   DocumentSchema,
   MAX_UPLOAD_BYTES,
   GenerateQuizJobSchema,
@@ -16,6 +17,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import { createApp } from "../src/app";
 import { loadConfig } from "../src/config";
 import { MAX_ACTIVE_JOBS_PER_USER } from "../src/core/jobs";
+import { t } from "../src/i18n";
 import { createProviders } from "../src/providers";
 import type { ConsoleEmailSender } from "../src/providers/email/consoleEmailSender";
 import { createMemoryQueue } from "../src/queue/memory";
@@ -77,7 +79,10 @@ describe("quiz API", () => {
   });
 
   it("rejects requests without a session", async () => {
-    await request(app).get("/api/v1/document").expect(401);
+    const { body } = await request(app).get("/api/v1/document").expect(401);
+    expect(body).toEqual({
+      error: { code: "errors.session.ended", message: t("errors.session.ended") },
+    });
     await request(app).post("/api/v1/jobs").send({ documentId: 1 }).expect(401);
     await request(app).get("/api/v1/jobs/1").expect(401);
   });
@@ -103,17 +108,19 @@ describe("quiz API", () => {
   });
 
   it("rejects an upload with no file", async () => {
-    await alice.post("/api/v1/document/upload").expect(400);
+    const { body } = await alice.post("/api/v1/document/upload").expect(400);
+    expect(body.error.code).toBe("errors.upload.noFile");
   });
 
   it("rejects file types it can't read with 415", async () => {
-    await alice
+    const { body } = await alice
       .post("/api/v1/document/upload")
       .attach("file", Buffer.from("MZ"), {
         filename: "setup.exe",
         contentType: "application/x-msdownload",
       })
       .expect(415);
+    expect(body.error.code).toBe("errors.upload.unsupportedType");
   });
 
   it("accepts markdown sent as application/octet-stream, using the extension", async () => {
@@ -162,13 +169,14 @@ describe("quiz API", () => {
   });
 
   it("rejects files over the size limit with 413", async () => {
-    await alice
+    const { body } = await alice
       .post("/api/v1/document/upload")
       .attach("file", Buffer.alloc(MAX_UPLOAD_BYTES + 1), {
         filename: "huge.txt",
         contentType: "text/plain",
       })
       .expect(413);
+    expect(body.error).toMatchObject({ code: "errors.upload.tooLarge", values: { maxMb: 20 } });
   });
 
   it("the job reads the document and writes a structured quiz", async () => {
@@ -312,12 +320,19 @@ describe("quiz API", () => {
         "error.type": "TooManyJobsError",
       }),
     ]);
-    expect(refusedUpload.body.error).toMatch(/at most 3 quizzes in progress/);
+    // The code and values let the frontend word it; the message is the English, for curl.
+    expect(ApiErrorResponseSchema.parse(refusedUpload.body)).toEqual({
+      error: {
+        code: "errors.jobs.tooManyActive",
+        values: { count: MAX_ACTIVE_JOBS_PER_USER },
+        message: t("errors.jobs.tooManyActive", { count: MAX_ACTIVE_JOBS_PER_USER }),
+      },
+    });
     const refusedJob = await busy
       .post("/api/v1/jobs")
       .send({ documentId: finished.document.id })
       .expect(429);
-    expect(refusedJob.body.error).toMatch(/at most 3 quizzes in progress/);
+    expect(refusedJob.body.error).toMatchObject({ code: "errors.jobs.tooManyActive" });
 
     const { body: list } = await busy.get("/api/v1/document").expect(200);
     expect(list.documents).toHaveLength(MAX_ACTIVE_JOBS_PER_USER + 1);
@@ -326,7 +341,8 @@ describe("quiz API", () => {
   it("hides one user's quiz and documents from another user", async () => {
     const bob = await loggedInAgent("bob@example.com");
 
-    await bob.get(`/api/v1/quiz/${quiz.id}`).expect(404);
+    const { body: missing } = await bob.get(`/api/v1/quiz/${quiz.id}`).expect(404);
+    expect(missing.error.code).toBe("errors.notFound.quiz");
     await bob.put(`/api/v1/quiz/${quiz.id}`).send({ title: "Mine now", questions: [] }).expect(404);
     await bob.get(`/api/v1/quiz/${quiz.id}/export`).expect(404);
     await bob.delete(`/api/v1/quiz/${quiz.id}`).expect(404);

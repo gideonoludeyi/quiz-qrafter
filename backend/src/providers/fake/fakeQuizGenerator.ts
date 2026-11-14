@@ -16,7 +16,7 @@ export class FakeQuizGenerator implements QuizGenerator {
   ): Promise<QuizDraft> {
     if (documentText.includes(FAKE_FAIL_MARKER)) {
       await sleep(this.delayMs);
-      throw new PermanentJobError("The fake AI was asked to fail.");
+      throw new PermanentJobError("errors.jobs.fakeFailure");
     }
 
     const quiz = this.quizFor(documentText);
