@@ -3,12 +3,16 @@ import { ApiError } from "@google/genai";
 import PDFDocument from "pdfkit";
 import { describe, expect, it } from "vite-plus/test";
 import { loadConfig } from "../src/config";
-import { PermanentJobError, TransientProviderError } from "../src/providers/errors";
-import { RecitationError, classifyGeminiError, streamText } from "../src/providers/gemini/client";
+import {
+  PermanentJobError,
+  RecitationError,
+  TransientProviderError,
+} from "../src/providers/errors";
+import { classifyGeminiError, streamText } from "../src/providers/gemini/client";
 import { salvageQuiz } from "../src/providers/gemini/quizGenerator";
-import { GeminiTextExtractor, filePartFor } from "../src/providers/gemini/textExtractor";
+import { GeminiTranscriber, filePartFor } from "../src/providers/gemini/transcriber";
 import { withWideEvent } from "../src/observability/events";
-import { readLocally } from "../src/providers/localText";
+import { readDocument, readLocally } from "../src/core/documentReader";
 import { countQuestionsWritten } from "../src/providers/progress";
 import {
   DOCX,
@@ -51,10 +55,6 @@ describe("filePartFor", () => {
     expect(filePartFor(data, "image/jpeg")).toEqual({
       inlineData: { data: data.toString("base64"), mimeType: "image/jpeg" },
     });
-  });
-
-  it("rejects other types permanently", () => {
-    expect(() => filePartFor(Buffer.from(""), "application/zip")).toThrow(PermanentJobError);
   });
 });
 
@@ -242,29 +242,83 @@ async function pdfWith(text: string): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-describe("GeminiTextExtractor", () => {
+describe("readDocument", () => {
   const PAPER =
     "Ant colony optimisation finds short paths by laying and following pheromone trails.";
-  const extractorAnswering = (...chunks: object[]) =>
-    new GeminiTextExtractor(geminiStreaming(...chunks), "gemini-test");
+  // A Transcriber that answers `text`, or fails with `error`, and counts its calls.
+  const transcriber = (outcome: { text?: string; error?: Error }) => {
+    const calls: string[] = [];
+    return {
+      calls,
+      async transcribe(_content: Buffer, mimeType: string) {
+        calls.push(mimeType);
+        if (outcome.error) throw outcome.error;
+        return outcome.text ?? "";
+      },
+    };
+  };
+  const recitation = () => new RecitationError("The AI declined to read this file.");
 
-  it("reads a PDF's own text when Gemini won't copy it", async () => {
-    const extractor = extractorAnswering({ text: "Ant colony" }, finishedWith("RECITATION"));
-    const text = await extractor.extract(await pdfWith(PAPER), "application/pdf");
-    expect(text.replace(/\s+/g, " ")).toContain(PAPER);
+  it("reads text and Word files itself, without the Transcriber", async () => {
+    const ai = transcriber({ text: "unused" });
+    expect(await readDocument(ai, Buffer.from("plain"), "text/plain")).toBe("plain");
+    expect((await readDocument(ai, await docxWith("Hello from Word"), DOCX)).trim()).toBe(
+      "Hello from Word",
+    );
+    expect(ai.calls).toEqual([]);
   });
 
-  it("keeps the refusal for a scanned PDF, which has no text to read", async () => {
-    const extractor = extractorAnswering(finishedWith("RECITATION"));
-    await expect(extractor.extract(await pdfWith(""), "application/pdf")).rejects.toBeInstanceOf(
-      RecitationError,
+  it("sends PDFs and images to the Transcriber, and records how it read them", async () => {
+    const ai = transcriber({ text: "Transcribed." });
+    const events = captureEvents();
+    const text = await withWideEvent("job.run", {}, () =>
+      readDocument(ai, Buffer.from("png"), "image/png"),
+    );
+    events.stop();
+    expect(text).toBe("Transcribed.");
+    expect(ai.calls).toEqual(["image/png"]);
+    expect(events.lines[0]).toMatchObject({ "app.document.read_from": "ai" });
+  });
+
+  it("refuses other file types, and files with no text, permanently", async () => {
+    const ai = transcriber({ text: "   " });
+    await expect(readDocument(ai, Buffer.from(""), "application/zip")).rejects.toThrow(
+      "This file type can't be read.",
+    );
+    await expect(readDocument(ai, Buffer.from("%PDF"), "application/pdf")).rejects.toThrow(
+      "No text was found in this file.",
     );
   });
 
+  it("reads a PDF's own text when the AI won't copy it", async () => {
+    const events = captureEvents();
+    const text = await withWideEvent("job.run", {}, async () =>
+      readDocument(transcriber({ error: recitation() }), await pdfWith(PAPER), "application/pdf"),
+    );
+    events.stop();
+    expect(text.replace(/\s+/g, " ")).toContain(PAPER);
+    expect(events.lines[0]).toMatchObject({ "app.document.read_from": "pdf_text_layer" });
+  });
+
+  it("keeps the refusal for a scanned PDF, which has no text to read", async () => {
+    await expect(
+      readDocument(transcriber({ error: recitation() }), await pdfWith(""), "application/pdf"),
+    ).rejects.toBeInstanceOf(RecitationError);
+  });
+
   it("keeps any other refusal, even for a PDF with text", async () => {
-    const extractor = extractorAnswering(finishedWith("SAFETY"));
-    await expect(extractor.extract(await pdfWith(PAPER), "application/pdf")).rejects.toThrow(
-      "The AI declined to read this file.",
+    const refusal = new PermanentJobError("The AI declined to read this file.");
+    await expect(
+      readDocument(transcriber({ error: refusal }), await pdfWith(PAPER), "application/pdf"),
+    ).rejects.toBe(refusal);
+  });
+});
+
+describe("GeminiTranscriber", () => {
+  it("fails with RecitationError when Gemini won't copy published text", async () => {
+    const gemini = new GeminiTranscriber(geminiStreaming(finishedWith("RECITATION")), "m");
+    await expect(gemini.transcribe(Buffer.from("%PDF"), "application/pdf")).rejects.toBeInstanceOf(
+      RecitationError,
     );
   });
 });

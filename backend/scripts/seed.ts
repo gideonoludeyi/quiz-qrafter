@@ -5,7 +5,7 @@ import { loadConfig } from "../src/config";
 import { uploadDocument } from "../src/core/documents";
 import { getGenerateQuizJob } from "../src/core/jobs";
 import prisma from "../src/database";
-import { FAKE_SAMPLE_TEXT } from "../src/providers/fake/fakeExtractor";
+import { FAKE_SAMPLE_TEXT } from "../src/providers/fake/fakeTranscriber";
 import { createProviders } from "../src/providers";
 import { createMemoryQueue } from "../src/queue/memory";
 

@@ -8,7 +8,7 @@ import {
 } from "@google/genai";
 import { annotate, withSpan } from "../../observability/events";
 import type { SpanFields } from "../../observability/fields";
-import { PermanentJobError, TransientProviderError } from "../errors";
+import { PermanentJobError, RecitationError, TransientProviderError } from "../errors";
 
 // Finish reasons that mean the model declined to answer.
 const DECLINED = new Set<FinishReason | undefined>([
@@ -35,11 +35,6 @@ export function classifyGeminiError(error: unknown): unknown {
     return new TransientProviderError(`Gemini returned ${error.status}.`, { cause: error });
   }
   return error;
-}
-
-// Gemini stopped because its answer matched published text, e.g. when asked to copy a paper.
-export class RecitationError extends PermanentJobError {
-  override name = "RecitationError";
 }
 
 // A refusal shown to the user plainly; the cause records Gemini's reason, for the logs.

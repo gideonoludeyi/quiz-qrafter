@@ -2,12 +2,12 @@ import type { AiConfig, Config, EmailConfig, StorageConfig } from "../config";
 import { ConsoleEmailSender } from "./email/consoleEmailSender";
 import type { EmailSender } from "./email/types";
 import { ResendEmailSender } from "./email/resendEmailSender";
-import { FakeExtractor } from "./fake/fakeExtractor";
+import { FakeTranscriber } from "./fake/fakeTranscriber";
 import { FakeQuizGenerator } from "./fake/fakeQuizGenerator";
 import { FileBlobStore } from "./fake/fileBlobStore";
 import { createGeminiClient } from "./gemini/client";
 import { GeminiQuizGenerator } from "./gemini/quizGenerator";
-import { GeminiTextExtractor } from "./gemini/textExtractor";
+import { GeminiTranscriber } from "./gemini/transcriber";
 import { GcsBlobStore } from "./real/gcsBlobStore";
 import type { BlobStore, Providers } from "./types";
 
@@ -28,16 +28,16 @@ function emailSender(email: EmailConfig): EmailSender {
     : new ConsoleEmailSender();
 }
 
-function ai(config: AiConfig): Pick<Providers, "extractor" | "generator"> {
+function ai(config: AiConfig): Pick<Providers, "transcriber" | "generator"> {
   if (config.kind === "fake") {
     return {
-      extractor: new FakeExtractor(config.delayMs),
+      transcriber: new FakeTranscriber(config.delayMs),
       generator: new FakeQuizGenerator(config.delayMs),
     };
   }
   const client = createGeminiClient(config.apiKey);
   return {
-    extractor: new GeminiTextExtractor(client, config.model),
+    transcriber: new GeminiTranscriber(client, config.model),
     generator: new GeminiQuizGenerator(client, config.model),
   };
 }

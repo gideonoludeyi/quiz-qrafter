@@ -10,6 +10,11 @@ export class PermanentJobError extends Error {
   }
 }
 
+// The AI wouldn't answer because its answer matched published text, e.g. when asked to copy a paper.
+export class RecitationError extends PermanentJobError {
+  override name = "RecitationError";
+}
+
 // A provider failure that a retry may fix, such as a rate limit or a 503. The cause has the details.
 export class TransientProviderError extends Error {
   readonly expected = true;

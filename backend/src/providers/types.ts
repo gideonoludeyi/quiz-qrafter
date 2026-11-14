@@ -1,9 +1,9 @@
 import type { QuizDraft } from "@quizqrafter/shared";
 import type { EmailSender } from "./email/types";
 
-// Turns an uploaded file (PDF, image, Word, text) into plain text.
-export interface TextExtractor {
-  extract(content: Buffer, mimeType: string): Promise<string>;
+// Reads the text of a PDF or image, the files the server can't read itself.
+export interface Transcriber {
+  transcribe(content: Buffer, mimeType: string): Promise<string>;
 }
 
 // Stores files. `put` returns a URL that `get` accepts later.
@@ -23,7 +23,7 @@ export interface QuizGenerator {
 }
 
 export type Providers = {
-  extractor: TextExtractor;
+  transcriber: Transcriber;
   blobs: BlobStore;
   generator: QuizGenerator;
   email: EmailSender;

@@ -34,7 +34,8 @@ const prisma = new PrismaClient({ datasources: { db: { url: testDatabaseUrl() } 
 // Holds jobs until runJobs, standing in for BullMQ (covered in bullmq.test.ts and e2e).
 const queue = createMemoryQueue();
 const deps = { prisma, queue, providers: createProviders(config) };
-const extract = vi.spyOn(deps.providers.extractor, "extract");
+const transcribe = vi.spyOn(deps.providers.transcriber, "transcribe");
+const putBlob = vi.spyOn(deps.providers.blobs, "put");
 // A Node server around the Hono app, for supertest.
 const app = createAdaptorServer({ fetch: createApp(config, deps).fetch });
 
@@ -183,7 +184,8 @@ describe("quiz API", () => {
       questionsWritten: 3,
       error: null,
     });
-    expect(extract).toHaveBeenCalledWith(expect.any(Buffer), "text/plain");
+    // A text file is read on the server, not by the AI.
+    expect(transcribe).not.toHaveBeenCalled();
 
     const response = await alice.get(`/api/v1/quiz/${job.quizId}`).expect(200);
     quiz = QuizSchema.parse(response.body);
@@ -201,7 +203,7 @@ describe("quiz API", () => {
   });
 
   it("regenerating reuses the transcript and replaces the quiz", async () => {
-    const extractCallsBefore = extract.mock.calls.length;
+    const putsBefore = putBlob.mock.calls.length;
     const started = await alice
       .post("/api/v1/jobs")
       .send({ documentId: quiz.documentId })
@@ -217,7 +219,8 @@ describe("quiz API", () => {
 
     const { body: job } = await alice.get(`/api/v1/jobs/${started.body.id}`).expect(200);
     expect(job).toMatchObject({ status: "succeeded", quizId: quiz.id });
-    expect(extract.mock.calls.length).toBe(extractCallsBefore);
+    // The transcript saved the first time is reused, not written again.
+    expect(putBlob.mock.calls.length).toBe(putsBefore);
   });
 
   it("saves edits and returns them on the next read", async () => {

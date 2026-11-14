@@ -7,6 +7,7 @@ import {
 import type { GenerateQuizJob } from "@quizqrafter/shared";
 import { annotate, recordError, withWideEvent } from "../observability/events";
 import { PermanentJobError } from "../providers/errors";
+import { readDocument } from "./documentReader";
 import { saveGeneratedQuiz } from "./quizzes";
 import { type Deps, NotFoundError, type Run, TooManyJobsError } from "./types";
 
@@ -195,7 +196,7 @@ async function runGenerateQuizJob(
     if (transcriptionURL === null) {
       await setStage("reading");
       const raw = await providers.blobs.get(document.rawURL);
-      const text = await providers.extractor.extract(raw, document.mimeType);
+      const text = await readDocument(providers.transcriber, raw, document.mimeType);
       transcriptionURL = await providers.blobs.put(
         `u${document.userId}/document-${document.id}.transcript`,
         text,

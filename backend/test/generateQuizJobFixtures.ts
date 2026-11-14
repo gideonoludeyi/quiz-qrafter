@@ -7,7 +7,7 @@ import type { QuizDraft } from "@quizqrafter/shared";
 import { uploadDocument } from "../src/core/documents";
 import type { Deps, QuizQueue } from "../src/core/types";
 import { ConsoleEmailSender } from "../src/providers/email/consoleEmailSender";
-import { FakeExtractor } from "../src/providers/fake/fakeExtractor";
+import { FakeTranscriber } from "../src/providers/fake/fakeTranscriber";
 import { FileBlobStore } from "../src/providers/fake/fileBlobStore";
 import type { QuizGenerator } from "../src/providers/types";
 import { testDatabaseUrl } from "./testDatabase";
@@ -33,7 +33,7 @@ export function depsWith(queue: QuizQueue, generate: QuizGenerator["generate"]):
     providers: {
       blobs,
       email: new ConsoleEmailSender(),
-      extractor: new FakeExtractor(),
+      transcriber: new FakeTranscriber(),
       generator: { generate },
     },
   };

@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { type Document, type GenerateQuizJob, uploadTypeFor } from "@quizqrafter/shared";
+import { readLocally } from "./documentReader";
 import { assertCanStartJob, startGenerateQuizJob, toGenerateQuizJob } from "./jobs";
 import { annotate } from "../observability/events";
-import { readLocally } from "../providers/localText";
 import { type Deps, NotFoundError, UnsupportedFileError } from "./types";
 
 const withQuizAndLatestJob = {
