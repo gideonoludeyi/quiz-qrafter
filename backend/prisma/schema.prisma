@@ -142,7 +142,6 @@ enum JobStatus {
 enum JobStage {
     reading
     writing
-    saving
 }
 
 // One run of reading a document and writing its quiz. At most one per

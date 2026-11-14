@@ -2,12 +2,12 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { loadConfig } from "./config";
-import { startWorker } from "./core/worker";
 import prisma from "./database";
 import { createProviders } from "./providers";
+import { startBullWorker } from "./queue/bullmq";
 
 const config = loadConfig();
-const worker = await startWorker(
+const worker = await startBullWorker(
   { prisma, providers: createProviders(config) },
   { queue: config.queue, concurrency: config.worker.concurrency },
 );

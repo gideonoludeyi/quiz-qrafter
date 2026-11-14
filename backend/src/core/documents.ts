@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { type Document, type QuizJob, uploadTypeFor } from "@quizqrafter/shared";
-import { assertCanStartJob, enqueueQuizJob, toQuizJob } from "./jobs";
+import { assertCanStartJob, startQuizJob, toQuizJob } from "./jobs";
 import { readLocally } from "../providers/localText";
-import { type Deps, NotFoundError, TooManyJobsError, UnsupportedFileError } from "./types";
+import { type Deps, NotFoundError, UnsupportedFileError } from "./types";
 
 const withQuizAndLatestJob = {
   quiz: { select: { id: true } },
@@ -42,7 +42,7 @@ export async function uploadDocument(
   const { prisma, providers } = deps;
   const mimeType = uploadTypeFor(file.mimeType, file.filename);
   if (mimeType === null) throw new UnsupportedFileError();
-  // Refuse before storing anything, so a rejected upload leaves no document behind.
+  // Refuse before storing anything if we can; starting the job below is what enforces the limit.
   await assertCanStartJob(prisma, userId);
 
   // The random part keeps two uploads with the same filename from overwriting each other.
@@ -50,20 +50,21 @@ export async function uploadDocument(
     `u${userId}/${randomUUID()}-${file.filename}`,
     file.content,
   );
-  const { id } = await prisma.document.create({
-    data: { filename: file.filename, mimeType, size: file.size, rawURL, userId },
-  });
 
   let job: QuizJob;
   try {
-    job = await enqueueQuizJob(deps, userId, id);
+    job = await startQuizJob(deps, userId, {
+      newDocument: { filename: file.filename, mimeType, size: file.size, rawURL },
+    });
   } catch (error) {
-    // A concurrent upload took the last slot after the check above.
-    if (error instanceof TooManyJobsError) await prisma.document.delete({ where: { id } });
+    // No document refers to the file, e.g. a concurrent upload took the last slot.
+    await providers.blobs
+      .delete(rawURL)
+      .catch((cause) => console.error(`Deleting unused file ${rawURL} failed:`, cause));
     throw error;
   }
   const row = await prisma.document.findUniqueOrThrow({
-    where: { id },
+    where: { id: job.documentId },
     include: withQuizAndLatestJob,
   });
   return { document: toDocument(row), job };

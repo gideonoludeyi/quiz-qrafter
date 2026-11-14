@@ -30,8 +30,6 @@ function describe(job: QuizJob): { label: string; percent: number } {
         percent: 25 + Math.round(share * 65),
       };
     }
-    case "saving":
-      return { label: "Saving your quiz…", percent: 95 };
     default:
       return { label: "Starting…", percent: 10 };
   }

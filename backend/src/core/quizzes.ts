@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient, Question as QuestionRow } from "@prisma/client";
+import type { Prisma, Question as QuestionRow } from "@prisma/client";
 import { type Question, QuestionSchema, type Quiz, type QuizDraft } from "@quizqrafter/shared";
 import { type Deps, NotFoundError } from "./types";
 
@@ -59,7 +59,7 @@ async function findOwnedQuiz({ prisma }: Deps, userId: number, quizId: number): 
 
 // Stores a generated quiz for a document, replacing any existing quiz. Returns the quiz id.
 export async function saveGeneratedQuiz(
-  prisma: PrismaClient,
+  prisma: Prisma.TransactionClient,
   documentId: number,
   draft: QuizDraft,
 ): Promise<number> {

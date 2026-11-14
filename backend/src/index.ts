@@ -3,11 +3,11 @@ import { createApp } from "./app";
 import { loadConfig } from "./config";
 import prisma from "./database";
 import { createProviders } from "./providers";
-import { createQuizQueue } from "./queue";
+import { createBullQueue } from "./queue/bullmq";
 
 const config = loadConfig();
 // The API only sends quiz jobs to the queue; worker processes (`npm run worker`) run them.
-const queue = createQuizQueue(config.queue);
+const queue = createBullQueue(config.queue);
 const deps = { prisma, queue, providers: createProviders(config) };
 const app = createApp(config, deps);
 

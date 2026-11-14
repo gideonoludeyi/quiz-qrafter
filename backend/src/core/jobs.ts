@@ -2,15 +2,23 @@ import { Prisma, type PrismaClient, type JobStage, type QuizJob as JobRow } from
 import type { QuizJob } from "@quizqrafter/shared";
 import { PermanentJobError } from "../providers/errors";
 import { saveGeneratedQuiz } from "./quizzes";
-import { type Deps, NotFoundError, TooManyJobsError } from "./types";
+import { type Deps, NotFoundError, type Run, TooManyJobsError } from "./types";
 
 // Business rule: how many quizzes one user may have queued or running at once.
 export const MAX_ACTIVE_JOBS_PER_USER = 3;
+// Business rule: a job that fails for a reason a retry might fix is run at most this many times.
+export const MAX_RUNS = 3;
+// The wait before the first retry; it doubles for each retry after that.
+export const RETRY_DELAY_MS = 30_000;
 const PROGRESS_INTERVAL_MS = 1_000;
+// Namespaces the per-user advisory lock taken while starting jobs.
+const START_LOCK = 7101;
 
-export const GENERIC_FAILURE = "Something went wrong while making your quiz. Please try again.";
+const GENERIC_FAILURE = "Something went wrong while making your quiz. Please try again.";
 const NOT_QUEUED = "Your quiz couldn't be started. Please try again.";
-export const ACTIVE: JobRow["status"][] = ["queued", "running"];
+const ACTIVE: JobRow["status"][] = ["queued", "running"];
+
+type Db = Prisma.TransactionClient;
 
 // Converts a job row to the shared shape. `quizId` is the document's quiz, shown once the job succeeded.
 export function toQuizJob(row: JobRow, documentQuizId: number | null): QuizJob {
@@ -34,64 +42,67 @@ function toQuizJobWithQuiz(row: JobWithDocumentQuiz): QuizJob {
   return toQuizJob(row, row.document.quiz?.id ?? null);
 }
 
-async function findActiveJob(prisma: PrismaClient, documentId: number) {
-  return prisma.quizJob.findFirst({
-    where: { documentId, status: { in: ACTIVE } },
-    include: withDocumentQuiz,
-  });
-}
-
 // Throws TooManyJobsError if the user already has the most quiz jobs in progress allowed.
-export async function assertCanStartJob(prisma: PrismaClient, userId: number): Promise<void> {
-  const active = await prisma.quizJob.count({
+// Not binding on its own: only startQuizJob counts under the lock.
+export async function assertCanStartJob(db: Db, userId: number): Promise<void> {
+  const active = await db.quizJob.count({
     where: { status: { in: ACTIVE }, document: { userId } },
   });
   if (active >= MAX_ACTIVE_JOBS_PER_USER) throw new TooManyJobsError(MAX_ACTIVE_JOBS_PER_USER);
 }
 
-// Queues a quiz job for one of the user's documents and sends it to the workers.
+// A document to create along with its first quiz job.
+export type NewDocument = { filename: string; mimeType: string; size: number; rawURL: string };
+
+// Starts a quiz job for one of the user's documents, or for a new one, and sends it to the workers.
 // Returns the document's job already in progress instead of starting a second one.
-export async function enqueueQuizJob(
-  { prisma, queue }: Deps,
+export async function startQuizJob(
+  { prisma, queue }: Pick<Deps, "prisma" | "queue">,
   userId: number,
-  documentId: number,
+  target: number | { newDocument: NewDocument },
 ): Promise<QuizJob> {
-  const document = await prisma.document.findFirst({ where: { id: documentId, userId } });
-  if (document === null) throw new NotFoundError("Document");
+  const { row, started } = await prisma.$transaction(async (tx) => {
+    // Serializes starts per user, so two at once can't both pass the limit.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${START_LOCK}::int, ${userId}::int)`;
 
-  const existing = await findActiveJob(prisma, documentId);
-  if (existing !== null) return toQuizJobWithQuiz(existing);
-
-  await assertCanStartJob(prisma, userId);
-
-  let row: JobWithDocumentQuiz;
-  try {
-    row = await prisma.quizJob.create({ data: { documentId }, include: withDocumentQuiz });
-  } catch (error) {
-    // A concurrent request queued one first; the partial unique index rejected ours.
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      const raced = await findActiveJob(prisma, documentId);
-      if (raced !== null) return toQuizJobWithQuiz(raced);
+    if (typeof target === "number") {
+      const document = await tx.document.findFirst({ where: { id: target, userId } });
+      if (document === null) throw new NotFoundError("Document");
+      const existing = await tx.quizJob.findFirst({
+        where: { documentId: target, status: { in: ACTIVE } },
+        include: withDocumentQuiz,
+      });
+      if (existing !== null) return { row: existing, started: false };
     }
-    throw error;
-  }
 
+    await assertCanStartJob(tx, userId);
+    const documentId =
+      typeof target === "number"
+        ? target
+        : (await tx.document.create({ data: { ...target.newDocument, userId } })).id;
+    const created = await tx.quizJob.create({ data: { documentId }, include: withDocumentQuiz });
+    return { row: created, started: true };
+  });
+  if (!started) return toQuizJobWithQuiz(row);
+
+  // Sent after the commit, so a worker never sees a job before its row exists.
   try {
-    await queue.add(row.id);
+    await queue.send(row.id);
   } catch (error) {
     // Fail the row rather than leave it queued with no message; the user can try again.
     console.error(`Sending quiz job ${row.id} to the queue failed:`, error);
-    row = await prisma.quizJob.update({
+    const failed = await prisma.quizJob.update({
       where: { id: row.id },
       data: { status: "failed", error: NOT_QUEUED, finishedAt: new Date() },
       include: withDocumentQuiz,
     });
+    return toQuizJobWithQuiz(failed);
   }
   return toQuizJobWithQuiz(row);
 }
 
 export async function getQuizJob(
-  { prisma }: Deps,
+  { prisma }: Pick<Deps, "prisma">,
   userId: number,
   jobId: number,
 ): Promise<QuizJob> {
@@ -103,29 +114,28 @@ export async function getQuizJob(
   return toQuizJobWithQuiz(row);
 }
 
-// Writes to a claimed job, but only while this claim still owns it. If BullMQ restarted a
-// stalled job on another worker, the old run's writes are ignored.
-function claimWriter(prisma: PrismaClient, jobId: number, attempt: number) {
+// Only the run that owns a job may write to it; a takeover after a stall makes older runs stale.
+const ownedBy = (jobId: number, run: number) =>
+  ({ id: jobId, status: "running", attempts: run }) as const;
+
+// Writes to a running job, but only while `run` still owns it. Returns whether it did.
+function runWriter(prisma: PrismaClient, jobId: number, run: number) {
   return async (data: Prisma.QuizJobUpdateManyMutationInput): Promise<boolean> => {
-    const { count } = await prisma.quizJob.updateMany({
-      where: { id: jobId, status: "running", attempts: attempt },
-      data,
-    });
+    const { count } = await prisma.quizJob.updateMany({ where: ownedBy(jobId, run), data });
     return count > 0;
   };
 }
 
-// Which run of a BullMQ job this is. `claim` (BullMQ's attemptsStarted) is unique per run,
-// including restarts after a stall; `lastAttempt` says whether a failure may be retried.
-export type JobRun = { claim: number; lastAttempt: boolean };
-
 // Reads the document if needed, writes the quiz, and saves it, recording progress on the job.
 // Throws only when the job should be retried; other failures are recorded on the row.
-export async function runQuizJob(deps: Deps, jobId: number, run: JobRun): Promise<void> {
-  const { prisma, providers } = deps;
+export async function processQuizJob(
+  { prisma, providers }: Pick<Deps, "prisma" | "providers">,
+  jobId: number,
+  { run, final }: Run,
+): Promise<void> {
   const { count } = await prisma.quizJob.updateMany({
     where: { id: jobId, status: { in: ACTIVE } },
-    data: { status: "running", attempts: run.claim, stage: null, questionsWritten: 0 },
+    data: { status: "running", attempts: run, stage: null, questionsWritten: 0 },
   });
   if (count === 0) return; // Deleted, or already finished.
 
@@ -133,7 +143,7 @@ export async function runQuizJob(deps: Deps, jobId: number, run: JobRun): Promis
     where: { id: jobId },
     include: { document: true },
   });
-  const write = claimWriter(prisma, job.id, run.claim);
+  const write = runWriter(prisma, job.id, run);
   const setStage = (stage: JobStage) => write({ stage });
 
   try {
@@ -158,20 +168,25 @@ export async function runQuizJob(deps: Deps, jobId: number, run: JobRun): Promis
     );
     await reportProgress.flush();
 
-    if (!(await setStage("saving"))) return; // This claim was taken over; the new run saves.
-    await saveGeneratedQuiz(prisma, document.id, draft);
-    await write({
-      status: "succeeded",
-      stage: null,
-      questionsWritten: draft.questions.length,
-      error: null,
-      finishedAt: new Date(),
+    // The quiz and the job's success commit together, and only while this run owns the job.
+    await prisma.$transaction(async (tx) => {
+      const { count } = await tx.quizJob.updateMany({
+        where: ownedBy(job.id, run),
+        data: {
+          status: "succeeded",
+          stage: null,
+          questionsWritten: draft.questions.length,
+          error: null,
+          finishedAt: new Date(),
+        },
+      });
+      if (count > 0) await saveGeneratedQuiz(tx, document.id, draft);
     });
   } catch (error) {
-    console.error(`Quiz job ${job.id} (run ${run.claim}) failed:`, error);
+    console.error(`Quiz job ${job.id} (run ${run}) failed:`, error);
     if (error instanceof PermanentJobError) {
       await write({ status: "failed", stage: null, error: error.message, finishedAt: new Date() });
-    } else if (run.lastAttempt) {
+    } else if (final) {
       await write({
         status: "failed",
         stage: null,
@@ -179,19 +194,39 @@ export async function runQuizJob(deps: Deps, jobId: number, run: JobRun): Promis
         finishedAt: new Date(),
       });
     } else {
-      // Shown as waiting while BullMQ holds the retry back.
+      // Shown as waiting while the queue holds the retry back.
       await write({ status: "queued", stage: null });
       throw error;
     }
   }
 }
 
-// Fails a job BullMQ gave up on outside runQuizJob, e.g. after it stalled too often.
-export async function failQuizJob(prisma: PrismaClient, jobId: number): Promise<void> {
+// Fails a job the queue gave up on outside processQuizJob, e.g. after it stalled too often.
+export async function giveUpQuizJob(
+  { prisma }: Pick<Deps, "prisma">,
+  jobId: number,
+): Promise<void> {
   await prisma.quizJob.updateMany({
     where: { id: jobId, status: { in: ACTIVE } },
     data: { status: "failed", stage: null, error: GENERIC_FAILURE, finishedAt: new Date() },
   });
+}
+
+// Matches unfinished jobs to their queue messages: re-sends jobs whose message is missing
+// (e.g. the API stopped between saving the row and sending it) and fails ones the queue gave up on.
+export async function reconcileQuizJobs({
+  prisma,
+  queue,
+}: Pick<Deps, "prisma" | "queue">): Promise<void> {
+  const rows = await prisma.quizJob.findMany({
+    where: { status: { in: ACTIVE } },
+    select: { id: true },
+  });
+  for (const { id } of rows) {
+    const state = await queue.stateOf(id);
+    if (state === "gone") await queue.send(id);
+    else if (state === "finished") await giveUpQuizJob({ prisma }, id);
+  }
 }
 
 // Saves the latest progress count at most once a second, in order.

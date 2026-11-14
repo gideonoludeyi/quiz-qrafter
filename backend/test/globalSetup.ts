@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
-import { createQuizQueue } from "../src/queue";
+import { createBullQueue } from "../src/queue/bullmq";
 import { BACKEND_DIR, testDatabaseUrl, testQueueSettings } from "./testDatabase";
 
 // Migrates the test schemas and empties them, and the test queue, before the test run.
@@ -18,7 +18,7 @@ export default async function setup() {
   );
   await prisma.$disconnect();
 
-  const queue = createQuizQueue(testQueueSettings());
+  const queue = createBullQueue(testQueueSettings());
   await queue.bull.obliterate({ force: true });
   await queue.close();
 }

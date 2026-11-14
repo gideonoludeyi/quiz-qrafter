@@ -30,75 +30,67 @@ release. Add a tool name to select part of the graph. For example, run
 
 <!--VITE PLUS END-->
 
-# Project Notes
+# QuizQrafter
 
-Keep project-specific notes below the `VITE PLUS END` marker. `vp install` regenerates everything between the markers.
+Users upload study material (PDF, image, Word or text) and AI writes a quiz from it, which they can edit and export. A Hono API and separate quiz workers share one Postgres database. The React frontend talks to the API, and `packages/shared` holds the schemas both sides use.
 
-Write these notes above the level of the code: describe behavior, rules and intent, not where they are implemented. Name commands, environment variables, ports, API endpoints and named constants, but not functions, files, classes, tables or indexes; those get renamed and the notes would go stale silently. The code should explain itself.
+The maintainers write this file by hand. When something here is wrong or missing, say so in your reply and suggest the wording; they will make the edit.
 
-Record what a collaborator's agent needs in this repo (here, in code, or in issues and pull requests), not in an agent's private memory.
+`GLOSSARY.md` defines the domain language (Document, Quiz job, Active, Run, Final run, Stage). Use its terms when naming code, tests and messages, and propose a new entry when you name a new concept.
 
-## Adding Vite Plugins (npm Peer Conflicts)
+## Running locally
 
-The `vite` alias points at `@voidzero-dev/vite-plus-core@1.x`, which bundles Vite 8 but reports version `1.x`. npm checks plugin peer ranges such as `vite@"^5 || ^6 || ^7 || ^8"` against `1.x`, so `vp add <vite-plugin>` fails with `ERESOLVE`. Overrides do not fix this.
+`docker compose up -d` starts Postgres, the only service needed. `backend/.env.example` documents every setting. Use `STORAGE=local` and `AI=fake` to work with no cloud accounts.
 
-To add or upgrade a Vite plugin, edit `package.json` by hand and run `npm install --legacy-peer-deps` from the repo root. Do not set `legacy-peer-deps` in `.npmrc`, because that turns off peer checks for the whole repo. After the lockfile is updated, a plain `vp install` works.
+- `vp run dev`: API on 8080, one quiz worker on 8081, frontend on 3000. All three reload on change.
+- `vpx scripts/seed.ts` (from `backend/`): creates `demo@example.com` / `Password1` with a document and a quiz.
+- `vp test`: shared unit tests and backend tests. The backend tests use a `test` schema in the local Postgres, one file at a time.
+- `vp run e2e`: Playwright smoke tests on their own ports (3100, 8090, 8091) with the fake AI.
 
-Remove this workaround after upgrading to a Vite+ release that includes [PR #3317](https://github.com/voidzero-dev/vite-plus/pull/3317), which aligns the core version with the bundled Vite version. Tracking issue: [#2806](https://github.com/voidzero-dev/vite-plus/issues/2806).
+The fake AI fails on any document containing `FAKE_FAIL`, and `FAKE_AI_DELAY_MS` slows it so progress is visible. With `EMAIL=console`, password reset links are printed in the backend log.
 
-## Running Offline (No Cloud Accounts)
+## Business rules
 
-The backend can run without Google Cloud or the Gemini API. In `backend/.env`, set `STORAGE=local` (files go under `backend/.data/`) and `AI=fake` (text and Word files are read as-is, PDFs and images become sample text, and every quiz is the same three questions). Postgres still runs locally.
+The product depends on these rules. The backend enforces them under concurrent requests, and each one has a test.
 
-- `docker compose up -d` starts Postgres, the only service the app needs.
-- `vp run dev` starts the backend API (port 8080), one quiz worker (health check on 8081) and the frontend (port 3000). The API and worker restart on their own when backend or shared code changes.
-- `vpx scripts/seed.ts` (from `backend/`) creates `demo@example.com` / `Password1` with a document and a quiz.
-- Password reset links appear in the backend log (`EMAIL=console`).
-- `vp test` runs the shared unit tests and the backend tests. The backend tests use a separate `test` schema in the local Postgres.
-- `vp run e2e` runs the Playwright smoke tests against their own servers (frontend 3100, API 8090, worker 8091), with `AI=fake`. It uses Playwright's Chromium if you have run `npx playwright install chromium`, and your installed Chrome otherwise.
+- **At most `MAX_ACTIVE_JOBS_PER_USER` (3) Active Quiz jobs per user**, across all their Documents. This caps how much AI work one user can start at once.
+    - It applies to uploads and to generating, regenerating and retrying a quiz.
+    - Going over returns `429` with a message the user sees.
+    - A refused upload leaves no Document and no stored file.
+- **At most one Active Quiz job per Document.** Asking again returns the job already in progress, which doesn't count against the limit.
+- **Retries:** a failure a retry can't fix (a refusal, a file too long, an unsupported type) fails the Quiz job at once with a message for the user. Any other failure is retried twice, 30 s and then 60 s later. After that the user sees a generic message.
 
-`AI=gemini` (the default) needs `GEMINI_API_KEY`; `LLM_MODEL` picks the Gemini model (default `gemini-4-hydrogen`). It works with either storage setting. `STORAGE=gcs` (the default) needs `GOOGLE_APPLICATION_CREDENTIALS`.
+## Quiz jobs
 
-## Business Rules
+The app's own Quiz job record is the truth users see: status, Stage, progress and error. BullMQ only delivers, retries and recovers jobs. It runs on its Postgres backend in its own schema (`QUEUE_SCHEMA`), so there is no Redis. The business rules above live in the app's code, and BullMQ is configured from them.
 
-Constraints the product depends on. Enforce them in the backend, not only in the UI, and update this list and the tests when one changes.
-
-### Quiz job limits
-
-- **At most `MAX_ACTIVE_JOBS_PER_USER` (3) quizzes in progress per user**, counted across all of their documents. Only waiting or running jobs count; finished or failed ones don't.
-    - It limits how much AI work one user can start at once.
-    - It applies to uploads and to generating, regenerating or retrying a quiz.
-    - An upload over the limit is refused before anything is stored, so it leaves no document behind.
-    - Going over the limit returns `429` with a message the frontend shows the user.
-- **At most one quiz in progress per document.** Asking again for a document whose quiz is already in progress returns that job instead of starting another, and doesn't count against the per-user limit.
-    - A partial unique index enforces this even under concurrent requests.
-
-## Quiz Jobs
-
-Uploading a file records a quiz job and sends it to a [BullMQ](https://docs.bullmq.io/) queue. BullMQ uses its [Postgres backend](https://docs.bullmq.io/guide/postgresql), with its tables in their own schema (`QUEUE_SCHEMA`, default `bullmq`) of the app's database; there is no Redis. A worker takes the job, has Gemini read the file (PDFs and images; text and Word files are read locally), writes the quiz, and saves it. The browser polls `GET /api/v1/jobs/:id` for progress.
-
-- The API never runs jobs. Workers are separate processes: `npm run worker --workspace=backend`. Run as many as you like; each runs `WORKER_CONCURRENCY` jobs at once and serves `GET /healthz` on `WORKER_PORT`.
-- The app's own job record is what users see (status, stage, progress, error). BullMQ only delivers, retries and recovers jobs.
-- Failures a retry can't fix (a refusal, a file too long to read, an unsupported file) fail the job at once with a message shown to the user. Any other error is retried twice, 30 s and then 60 s later.
-- If a worker dies mid-job, BullMQ hands the job to another worker, and writes from the old run are ignored.
-- When a worker starts, it re-sends unfinished jobs that never reached the queue and fails ones BullMQ gave up on.
-- `FAKE_AI_DELAY_MS` slows the fake AI so progress is visible; the fake AI fails on notes containing `FAKE_FAIL`.
+- The API only starts jobs. Worker processes run them (`npm run worker --workspace=backend`), and you can run as many as you like.
+- When a worker stalls, BullMQ gives the job a new Run elsewhere. Only the newest Run's writes count, including the saved quiz.
+- When a worker starts, it re-sends Active jobs whose message never reached the queue, and fails the ones BullMQ gave up on.
+- Tests and the seed script run jobs through an in-memory queue in place of BullMQ. Only the BullMQ tests use the real queue.
 
 ## Authentication
 
-The backend uses better-auth, mounted at `/api/auth/*`, and the frontend uses better-auth's React client. Sessions are stored in Postgres and last 7 days. Everything under `/api/v1` requires a session.
+better-auth runs at `/api/auth/*`, with sessions in Postgres. Everything under `/api/v1` needs a session.
 
-- Passwords are hashed with bcrypt, which users created before better-auth were hashed with.
-- User IDs are serial integers, not strings, and so is everything that references them.
-- Password reset emails: `EMAIL=console` (the default) prints the link to the backend log, and `EMAIL=resend` sends it with Resend and needs `RESEND_API_KEY`. `EMAIL_FROM` sets the sender. The default sender, Resend's test address `onboarding@resend.dev`, only delivers to the Resend account owner's email.
-- better-auth only accepts sign-in requests from `FRONTEND_URL` origins. Requests without a trusted `Origin` header (e.g. curl, tests) need one set.
+- User IDs are integers, as is everything that refers to them.
+- Passwords use bcrypt, so users from before better-auth keep working.
+- better-auth only accepts sign-in from `FRONTEND_URL` origins. curl and tests need to send a matching `Origin` header.
+- Resend's default sender (`onboarding@resend.dev`) only delivers to the Resend account owner.
 
-## Shared Schemas
+## Shared schemas
 
-`packages/shared` holds the schemas for quizzes, documents and jobs, used by both the backend and the frontend. Change a schema there, never in one app only.
+The quiz, document and job schemas in `packages/shared` are the single definition for both the backend and the frontend. Change them there. The package has no build step: both apps compile it from source, so changes take effect at once.
 
-The package has no build step: the backend and frontend compile it from its TypeScript source, and the backend's production build bundles it in. Edits take effect right away, in development and in tests.
+## Database migrations
 
-## Database Migrations
+The user runs migrations in their own terminal, because Prisma asks for approval when a change can lose data. When a change needs one, edit `backend/prisma/schema.prisma` and give the user the commands, run from `backend/`:
 
-The user creates migrations in their own terminal, from `backend/`, with `npx prisma migrate dev --name <snake_case_name>`, and approves its prompt when a change can lose data. To review the SQL first, add `--create-only`, edit the generated migration (a rename comes out as a drop and an add), then run `npx prisma migrate dev` to apply it. When a change needs a migration, an agent edits the schema and hands the user the exact command to run.
+1. `npx prisma migrate dev --create-only --name <snake_case_name>`, when the SQL needs a look first. A rename comes out as a drop and an add, and removing an enum value needs existing rows moved off it.
+2. `npx prisma migrate dev` to create and apply it.
+
+## Adding a Vite plugin
+
+`vp add <vite-plugin>` fails with `ERESOLVE`. The `vite` alias points at Vite+ core, which bundles Vite 8 but reports version `1.x`, so plugin peer ranges never match, and overrides don't help. Instead, add the plugin to `package.json` by hand and run `npm install --legacy-peer-deps` once, from the repo root. After that, `vp install` works. Keep `legacy-peer-deps` out of `.npmrc`, so peer checks stay on for everything else.
+
+Drop this workaround once Vite+ ships [PR #3317](https://github.com/voidzero-dev/vite-plus/pull/3317) (tracking issue [#2806](https://github.com/voidzero-dev/vite-plus/issues/2806)).

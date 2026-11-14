@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const JOB_STATUSES = ["queued", "running", "succeeded", "failed"] as const;
-export const JOB_STAGES = ["reading", "writing", "saving"] as const;
+export const JOB_STAGES = ["reading", "writing"] as const;
 
 export const QuizJobSchema = z.object({
   id: z.number().int(),

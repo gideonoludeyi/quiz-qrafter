@@ -1,11 +1,23 @@
 import type { PrismaClient } from "@prisma/client";
 import type { Providers } from "../providers/types";
-import type { QuizQueue } from "../queue";
+
+// Where a quiz job's queue message is: still to be run, finished with, or never sent.
+export type MessageState = "waiting" | "finished" | "gone";
+
+// Carries quiz jobs to the workers. Adapters: BullMQ, and in-memory for tests and scripts.
+export type QuizQueue = {
+  // Sends a job to the workers; sending the same job twice is a no-op.
+  send(quizJobId: number): Promise<void>;
+  stateOf(quizJobId: number): Promise<MessageState>;
+};
+
+// One delivery of a quiz job to a worker. `run` is unique per delivery; no retry follows a `final` one.
+export type Run = { run: number; final: boolean };
 
 // What core functions need: the database, the queue to the workers, and the external providers.
 export type Deps = {
   prisma: PrismaClient;
-  queue: Pick<QuizQueue, "add">;
+  queue: QuizQueue;
   providers: Providers;
 };
 

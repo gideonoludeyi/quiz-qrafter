@@ -19,9 +19,16 @@ export class GcsBlobStore implements BlobStore {
   }
 
   async get(url: string): Promise<Buffer> {
-    const { hostname: bucket, pathname } = new URL(url);
-    const key = decodeURIComponent(pathname.slice(1));
-    const [content] = await this.storage.bucket(bucket).file(key).download();
+    const [content] = await this.fileAt(url).download();
     return content;
+  }
+
+  async delete(url: string): Promise<void> {
+    await this.fileAt(url).delete({ ignoreNotFound: true });
+  }
+
+  private fileAt(url: string) {
+    const { hostname: bucket, pathname } = new URL(url);
+    return this.storage.bucket(bucket).file(decodeURIComponent(pathname.slice(1)));
   }
 }
