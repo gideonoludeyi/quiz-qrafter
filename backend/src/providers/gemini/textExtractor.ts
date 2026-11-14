@@ -1,8 +1,8 @@
 import type { GoogleGenAI, Part } from "@google/genai";
 import { PermanentJobError } from "../errors";
-import { readLocally } from "../localText";
+import { readLocally, readPdfText } from "../localText";
 import type { TextExtractor } from "../types";
-import { createGeminiClient, streamText } from "./client";
+import { RecitationError, streamText } from "./client";
 
 const AI_READABLE_TYPES = new Set([
   "application/pdf",
@@ -11,6 +11,9 @@ const AI_READABLE_TYPES = new Set([
   "image/gif",
   "image/webp",
 ]);
+
+// Below this many non-space characters, a PDF's text layer is treated as missing (a scan).
+const MIN_PDF_TEXT_CHARS = 50;
 
 const SYSTEM_PROMPT = `You transcribe a student's study material into plain text. The transcript is the only copy of the material a quiz writer will see, so it must be complete and faithful.
 
@@ -32,14 +35,10 @@ export function filePartFor(content: Buffer, mimeType: string): Part {
 
 // Reads documents: PDFs and images are transcribed by Gemini, text and Word files are read locally.
 export class GeminiTextExtractor implements TextExtractor {
-  private readonly ai: GoogleGenAI;
-
   constructor(
-    apiKey: string,
+    private readonly ai: GoogleGenAI,
     private readonly model: string,
-  ) {
-    this.ai = createGeminiClient(apiKey);
-  }
+  ) {}
 
   async extract(content: Buffer, mimeType: string): Promise<string> {
     const text =
@@ -50,7 +49,21 @@ export class GeminiTextExtractor implements TextExtractor {
     return text;
   }
 
-  private transcribe(content: Buffer, mimeType: string): Promise<string> {
+  // Gemini won't copy published text, so a PDF it refuses for that is read from its own text layer.
+  private async transcribe(content: Buffer, mimeType: string): Promise<string> {
+    try {
+      return await this.transcribeWithGemini(content, mimeType);
+    } catch (error) {
+      if (!(error instanceof RecitationError) || mimeType !== "application/pdf") throw error;
+      const text = await readPdfText(content).catch(() => "");
+      // A scan has no text layer to fall back on.
+      if (text.replace(/\s/g, "").length < MIN_PDF_TEXT_CHARS) throw error;
+      console.warn("Gemini declined to copy a PDF (RECITATION); using its text layer instead.");
+      return text;
+    }
+  }
+
+  private transcribeWithGemini(content: Buffer, mimeType: string): Promise<string> {
     return streamText(
       this.ai,
       {

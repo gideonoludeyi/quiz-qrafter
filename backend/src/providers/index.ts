@@ -4,6 +4,7 @@ import { ResendEmailSender } from "./email/resendEmailSender";
 import { FakeExtractor } from "./fake/fakeExtractor";
 import { FakeQuizGenerator } from "./fake/fakeQuizGenerator";
 import { FileBlobStore } from "./fake/fileBlobStore";
+import { createGeminiClient } from "./gemini/client";
 import { GeminiQuizGenerator } from "./gemini/quizGenerator";
 import { GeminiTextExtractor } from "./gemini/textExtractor";
 import { GcsBlobStore } from "./real/gcsBlobStore";
@@ -30,11 +31,11 @@ export function createProviders(config: Config): Providers {
       generator: new FakeQuizGenerator(config.fakeAiDelayMs),
     };
   }
-  const apiKey = config.gemini.apiKey!;
+  const ai = createGeminiClient(config.gemini.apiKey!);
   return {
     blobs,
     email,
-    extractor: new GeminiTextExtractor(apiKey, config.gemini.model),
-    generator: new GeminiQuizGenerator(apiKey, config.gemini.model),
+    extractor: new GeminiTextExtractor(ai, config.gemini.model),
+    generator: new GeminiQuizGenerator(ai, config.gemini.model),
   };
 }

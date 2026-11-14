@@ -2,7 +2,7 @@ import type { GoogleGenAI } from "@google/genai";
 import { type QuizDraft, QuizDraftSchema } from "@quizqrafter/shared";
 import { countQuestionsWritten } from "../progress";
 import type { QuizGenerator } from "../types";
-import { createGeminiClient, streamText } from "./client";
+import { streamText } from "./client";
 
 const sharedFields = {
   prompt: { type: "string" },
@@ -73,14 +73,10 @@ For each question:
 
 // Generates quizzes with Gemini, using schema-constrained JSON output.
 export class GeminiQuizGenerator implements QuizGenerator {
-  private readonly ai: GoogleGenAI;
-
   constructor(
-    apiKey: string,
+    private readonly ai: GoogleGenAI,
     private readonly model: string,
-  ) {
-    this.ai = createGeminiClient(apiKey);
-  }
+  ) {}
 
   async generate(
     documentText: string,

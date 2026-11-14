@@ -32,10 +32,18 @@ export function classifyGeminiError(error: unknown): unknown {
   return error;
 }
 
+// Gemini stopped because its answer matched published text, e.g. when asked to copy a paper.
+export class RecitationError extends PermanentJobError {}
+
 // A refusal shown to the user plainly; the cause records Gemini's reason, for the logs.
-function declined(task: string, reason: string, safetyRatings?: SafetyRating[]) {
+function declined(
+  task: string,
+  reason: string,
+  safetyRatings?: SafetyRating[],
+  ErrorType = PermanentJobError,
+) {
   const ratings = safetyRatings?.length ? `; safety ratings: ${JSON.stringify(safetyRatings)}` : "";
-  return new PermanentJobError(`The AI declined to ${task}.`, {
+  return new ErrorType(`The AI declined to ${task}.`, {
     cause: new Error(`Gemini ${reason}${ratings}`),
   });
 }
@@ -72,7 +80,9 @@ export async function streamText(
   const candidate = last?.candidates?.[0];
   const finishReason = candidate?.finishReason;
   if (DECLINED.has(finishReason)) {
-    throw declined(task, `finished with ${finishReason}`, candidate?.safetyRatings);
+    const ErrorType =
+      finishReason === FinishReason.RECITATION ? RecitationError : PermanentJobError;
+    throw declined(task, `finished with ${finishReason}`, candidate?.safetyRatings, ErrorType);
   }
   if (finishReason === FinishReason.MAX_TOKENS) throw new PermanentJobError(tooLong);
   return text;
