@@ -457,12 +457,19 @@ describe("deleting", () => {
     expect(wrong.body.code).toBe("INVALID_PASSWORD");
     expect(await prisma.document.count({ where: { userId: user.id } })).toBe(2);
 
+    const events = captureEvents();
     await agent
       .post("/api/auth/delete-user")
       .set("Origin", ORIGIN)
       .send({ password: PASSWORD })
       .expect(200);
+    events.stop();
 
+    // The request's event says whose account went, and how many documents went with it.
+    expect(events.named("http.request")[0]).toMatchObject({
+      "app.user.id": user.id,
+      "app.user.documents_deleted": 2,
+    });
     expect(await prisma.user.count({ where: { id: user.id } })).toBe(0);
     expect(await prisma.session.count({ where: { userId: user.id } })).toBe(0);
     expect(await prisma.document.count({ where: { userId: user.id } })).toBe(0);

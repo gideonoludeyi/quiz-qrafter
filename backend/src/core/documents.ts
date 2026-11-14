@@ -131,10 +131,26 @@ export async function deleteDocument(
 // Deletes all of a user's documents and their files, before their account is deleted.
 export async function deleteAllDocuments(deps: Deps, userId: number): Promise<void> {
   const rows = await deps.prisma.document.findMany({ where: { userId }, select: { id: true } });
+  let documentsDeleted = 0;
+  const failures: unknown[] = [];
+  // One at a time: an account can have many documents, and each delete needs a connection.
   for (const { id } of rows) {
-    // One deleted meanwhile, e.g. from another tab, is already gone.
-    await deleteDocument(deps, userId, id).catch((error) => {
-      if (!(error instanceof NotFoundError)) throw error;
-    });
+    try {
+      await deleteDocument(deps, userId, id);
+      documentsDeleted++;
+    } catch (error) {
+      // One deleted meanwhile, e.g. from another tab, is already gone.
+      if (!(error instanceof NotFoundError)) failures.push(error);
+    }
+  }
+  annotate({ "app.user.documents_deleted": documentsDeleted });
+  if (failures.length > 0) {
+    throw new AggregateError(
+      failures,
+      `Deleting ${failures.length} of ${rows.length} documents failed`,
+      {
+        cause: failures[0],
+      },
+    );
   }
 }

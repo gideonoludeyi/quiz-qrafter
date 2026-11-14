@@ -6,6 +6,7 @@ export type EventFields = {
   "http.response.status_code"?: number;
 
   "app.user.id"?: number;
+  "app.user.documents_deleted"?: number;
 
   "app.document.id"?: number;
   "app.document.mime_type"?: string;
