@@ -40,3 +40,17 @@ export type EventFields = {
   // Whether retrying could fix the failure.
   "app.error.retriable"?: boolean;
 };
+
+// Fields of a child span, such as one AI call. OpenTelemetry's gen_ai names where they exist.
+export type SpanFields = {
+  "gen_ai.operation.name"?: "generate_content";
+  "gen_ai.provider.name"?: "gcp.gemini";
+  "gen_ai.request.model"?: string;
+  "gen_ai.response.finish_reasons"?: string;
+  "gen_ai.usage.input_tokens"?: number;
+  "gen_ai.usage.output_tokens"?: number;
+  // What the call is for, such as "read this file" or "write a quiz".
+  "app.ai.task"?: string;
+  "http.response.status_code"?: number;
+  "error.type"?: string;
+};

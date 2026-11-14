@@ -44,6 +44,8 @@ export default defineConfig({
         QUEUE_SCHEMA: testQueueSettings().schema,
         WORKER_PORT: String(WORKER_PORT),
         WORKER_CONCURRENCY: "2",
+        // Tests never export telemetry, even when backend/.env points at a collector.
+        OTEL_EXPORTER_OTLP_ENDPOINT: "",
       },
     },
     {

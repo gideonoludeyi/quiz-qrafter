@@ -14,13 +14,13 @@ import {
   reconcileGenerateQuizJobs,
 } from "../core/jobs";
 import type { Deps, MessageState, QuizQueue } from "../core/types";
-import { log } from "../observability/events";
+import { log, traceCarrier, withTraceParent } from "../observability/events";
 
 // The BullMQ queue carrying GenerateQuizJobs from the API to the workers.
 export const QUIZ_QUEUE = "generate-quiz-jobs";
 
-// Each message names a GenerateQuizJob row; the row holds its status and progress.
-type GenerateQuizJobMessage = { generateQuizJobId: number };
+// Each message names a GenerateQuizJob row, which holds its status and progress, and carries the sender's trace.
+type GenerateQuizJobMessage = { generateQuizJobId: number; trace?: Record<string, string> };
 
 // Where the queue lives: the app's database, in its own schema.
 export type QueueSettings = { databaseUrl: string | undefined; schema: string };
@@ -67,7 +67,7 @@ export function createBullQueue(settings: QueueSettings): BullQuizQueue {
   return {
     bull,
     async send(generateQuizJobId) {
-      const message: GenerateQuizJobMessage = { generateQuizJobId };
+      const message: GenerateQuizJobMessage = { generateQuizJobId, trace: traceCarrier() };
       await bull.add("quiz", message, { jobId: messageIdFor(generateQuizJobId) });
     },
     async stateOf(generateQuizJobId): Promise<MessageState> {
@@ -100,11 +100,13 @@ export async function startBullWorker(
   const worker = new BullWorker(
     QUIZ_QUEUE,
     async (job: Job<GenerateQuizJobMessage>) =>
-      processGenerateQuizJob(deps, job.data.generateQuizJobId, {
-        // attemptsStarted counts restarts after a stall too, so each delivery gets its own number.
-        run: job.attemptsStarted,
-        final: job.attemptsMade + 1 >= (job.opts.attempts ?? 1),
-      }),
+      withTraceParent(job.data.trace, () =>
+        processGenerateQuizJob(deps, job.data.generateQuizJobId, {
+          // attemptsStarted counts restarts after a stall too, so each delivery gets its own number.
+          run: job.attemptsStarted,
+          final: job.attemptsMade + 1 >= (job.opts.attempts ?? 1),
+        }),
+      ),
     { connection: queueConnection(queueSettings), concurrency, ...bull },
     createPostgresBackend,
   );
@@ -115,7 +117,10 @@ export async function startBullWorker(
     void job
       .isFailed()
       .then(async (failed) => {
-        if (failed) await giveUpGenerateQuizJob(deps, job.data.generateQuizJobId);
+        if (!failed) return;
+        await withTraceParent(job.data.trace, () =>
+          giveUpGenerateQuizJob(deps, job.data.generateQuizJobId),
+        );
       })
       .catch(() => {}); // giveUpGenerateQuizJob's event records the failure.
   });

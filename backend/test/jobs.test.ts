@@ -10,8 +10,9 @@ import {
 import { type Deps, NotFoundError, TooManyJobsError } from "../src/core/types";
 import { PermanentJobError } from "../src/providers/errors";
 import { GeminiQuizGenerator } from "../src/providers/gemini/quizGenerator";
+import { withWideEvent } from "../src/observability/events";
 import { createMemoryQueue } from "../src/queue/memory";
-import { captureEvents, finishedWith, geminiStreaming } from "./fixtures";
+import { captureEvents, finishedWith, geminiStreaming, startTestTracing } from "./fixtures";
 import {
   QUIZ,
   blobDir,
@@ -181,6 +182,25 @@ describe("a run's wide event", () => {
       "app.error.retriable": true,
       "exception.message": "503 overloaded",
     });
+  });
+});
+
+describe("a run's trace", () => {
+  it("continues the trace of the request that started the job", async () => {
+    const tracing = startTestTracing();
+    try {
+      const { id: userId } = await newUser();
+      const { jobId } = await withWideEvent("http.request", {}, () => upload(succeeding, userId));
+      await queue.deliver(succeeding, jobId);
+
+      const [request] = tracing.spans("http.request");
+      const [run] = tracing.spans("job.run");
+      expect(run.spanContext().traceId).toBe(request.spanContext().traceId);
+      expect(run.parentSpanContext?.spanId).toBe(request.spanContext().spanId);
+      expect(run.attributes).toMatchObject({ "app.job.id": jobId, "app.job.outcome": "succeeded" });
+    } finally {
+      await tracing.stop();
+    }
   });
 });
 

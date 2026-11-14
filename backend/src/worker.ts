@@ -4,9 +4,11 @@ import { Hono } from "hono";
 import { loadConfig } from "./config";
 import prisma from "./database";
 import { exitOnCrash, log } from "./observability/events";
+import { startTelemetry } from "./observability/telemetry";
 import { createProviders } from "./providers";
 import { startBullWorker } from "./queue/bullmq";
 
+const telemetry = startTelemetry("quizqrafter-worker");
 exitOnCrash();
 const config = loadConfig();
 const worker = await startBullWorker(
@@ -39,5 +41,8 @@ const server = serve({ fetch: health.fetch, port: config.worker.port }, () => {
 process.on("SIGTERM", () => {
   log("info", "Quiz worker stopping");
   server.close();
-  void worker.stop().finally(() => prisma.$disconnect());
+  void worker
+    .stop()
+    .then(() => telemetry.shutdown())
+    .finally(() => prisma.$disconnect());
 });

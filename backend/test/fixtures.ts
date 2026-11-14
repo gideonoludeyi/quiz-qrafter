@@ -1,4 +1,12 @@
 import type { GoogleGenAI } from "@google/genai";
+import { context, propagation, trace } from "@opentelemetry/api";
+import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
+import { W3CTraceContextPropagator } from "@opentelemetry/core";
+import {
+  InMemorySpanExporter,
+  SimpleSpanProcessor,
+  TracerProvider,
+} from "@opentelemetry/sdk-trace";
 import JSZip from "jszip";
 import { captureOutput } from "../src/observability/events";
 
@@ -42,3 +50,23 @@ export const geminiStreaming = (...chunks: object[]) =>
   }) as unknown as GoogleGenAI;
 
 export const finishedWith = (finishReason: string) => ({ candidates: [{ finishReason }] });
+
+// Records finished spans in memory until `stop`, using OpenTelemetry's global setup as the app does.
+export function startTestTracing() {
+  const exporter = new InMemorySpanExporter();
+  const provider = new TracerProvider({ spanProcessors: [new SimpleSpanProcessor({ exporter })] });
+  context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable());
+  propagation.setGlobalPropagator(new W3CTraceContextPropagator());
+  trace.setGlobalTracerProvider(provider);
+  return {
+    spans: (name?: string) =>
+      exporter.getFinishedSpans().filter((span) => name === undefined || span.name === name),
+    reset: () => exporter.reset(),
+    async stop() {
+      await provider.shutdown();
+      trace.disable();
+      context.disable();
+      propagation.disable();
+    },
+  };
+}

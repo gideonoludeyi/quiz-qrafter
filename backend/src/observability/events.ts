@@ -1,6 +1,15 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { type Span, SpanStatusCode, trace } from "@opentelemetry/api";
-import type { EventFields } from "./fields";
+import {
+  ROOT_CONTEXT,
+  type Span,
+  SpanStatusCode,
+  SeverityNumber,
+  context,
+  logs,
+  propagation,
+  trace,
+} from "@opentelemetry/api";
+import type { EventFields, SpanFields } from "./fields";
 import { redactText } from "./redact";
 
 // Wide events: one per API request or Run, built up as it runs and emitted once at the end.
@@ -53,6 +62,44 @@ export function withWideEvent<T>(
   });
 }
 
+// Runs `work` as a timed child span of the current event, such as one AI call. Exported, not printed.
+export function withSpan<T>(
+  name: string,
+  fields: SpanFields,
+  work: (set: (fields: SpanFields) => void) => Promise<T>,
+): Promise<T> {
+  return tracer.startActiveSpan(name, async (span) => {
+    const set = (more: SpanFields) => {
+      for (const [key, value] of Object.entries(more)) {
+        if (value !== undefined)
+          span.setAttribute(key, typeof value === "string" ? redactText(value) : value);
+      }
+    };
+    set(fields);
+    try {
+      return await work(set);
+    } catch (error) {
+      set({ "error.type": error instanceof Error ? error.name : typeof error });
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+}
+
+// The current trace, as headers to carry in a queue message.
+export function traceCarrier(): Record<string, string> {
+  const carrier: Record<string, string> = {};
+  propagation.inject(context.active(), carrier);
+  return carrier;
+}
+
+// Runs `work` in the trace a queue message carried, so a Run is a child of what sent it.
+export function withTraceParent<T>(carrier: Record<string, string> | undefined, work: () => T): T {
+  return context.with(propagation.extract(ROOT_CONTEXT, carrier ?? {}), work);
+}
+
 // Adds fields to the current wide event, redacted. Outside one, it does nothing.
 export function annotate(fields: EventFields): void {
   const event = current.getStore();
@@ -84,7 +131,19 @@ export function log(
     if (value !== undefined) record[key] = redactText(value);
   }
   writeLine(format(record), done);
+  logs.getLogger("quizqrafter").emit({
+    severityNumber: SEVERITY[level],
+    severityText: level.toUpperCase(),
+    body: record.message,
+    attributes: record,
+  });
 }
+
+const SEVERITY = {
+  info: SeverityNumber.INFO,
+  warn: SeverityNumber.WARN,
+  error: SeverityNumber.ERROR,
+};
 
 // Logs an unhandled rejection or uncaught exception, then exits, as Node would without a handler.
 export function exitOnCrash(): void {

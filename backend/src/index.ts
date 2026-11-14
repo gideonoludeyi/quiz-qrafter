@@ -3,9 +3,11 @@ import { createApp } from "./app";
 import { loadConfig } from "./config";
 import prisma from "./database";
 import { exitOnCrash, log } from "./observability/events";
+import { startTelemetry } from "./observability/telemetry";
 import { createProviders } from "./providers";
 import { createBullQueue } from "./queue/bullmq";
 
+const telemetry = startTelemetry("quizqrafter-api");
 exitOnCrash();
 const config = loadConfig();
 // The API only sends GenerateQuizJobs to the queue; worker processes (`npm run worker`) run them.
@@ -20,6 +22,8 @@ const server = serve({ fetch: app.fetch, port: config.port }, () => {
 process.on("SIGTERM", () => {
   log("info", "API stopping");
   server.close(() => {
-    void queue.close().finally(() => prisma.$disconnect());
+    void Promise.allSettled([queue.close(), telemetry.shutdown()]).finally(() =>
+      prisma.$disconnect(),
+    );
   });
 });

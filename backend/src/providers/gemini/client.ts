@@ -6,7 +6,8 @@ import {
   GoogleGenAI,
   type SafetyRating,
 } from "@google/genai";
-import { annotate } from "../../observability/events";
+import { annotate, withSpan } from "../../observability/events";
+import type { SpanFields } from "../../observability/fields";
 import { PermanentJobError } from "../errors";
 
 // Finish reasons that mean the model declined to answer.
@@ -55,10 +56,29 @@ type Outcome = { task: string; tooLong: string };
 
 // Streams a response, calling `onText` with the text so far, and returns the full text.
 // Fails permanently if the model declined or ran out of output tokens.
-export async function streamText(
+export function streamText(
+  ai: GoogleGenAI,
+  params: GenerateContentParameters,
+  outcome: Outcome,
+  onText?: (textSoFar: string) => void,
+): Promise<string> {
+  return withSpan(
+    "gemini.generate_content",
+    {
+      "gen_ai.operation.name": "generate_content",
+      "gen_ai.provider.name": "gcp.gemini",
+      "gen_ai.request.model": params.model,
+      "app.ai.task": outcome.task,
+    },
+    (set) => streamAndCheck(ai, params, outcome, set, onText),
+  );
+}
+
+async function streamAndCheck(
   ai: GoogleGenAI,
   params: GenerateContentParameters,
   { task, tooLong }: Outcome,
+  set: (fields: SpanFields) => void,
   onText?: (textSoFar: string) => void,
 ): Promise<string> {
   let text = "";
@@ -78,11 +98,17 @@ export async function streamText(
       }
     }
   } catch (error) {
+    if (error instanceof ApiError) set({ "http.response.status_code": error.status });
     throw classifyGeminiError(error);
   }
 
   const candidate = last?.candidates?.[0];
   const finishReason = candidate?.finishReason;
+  set({
+    "gen_ai.response.finish_reasons": finishReason,
+    "gen_ai.usage.input_tokens": last?.usageMetadata?.promptTokenCount,
+    "gen_ai.usage.output_tokens": last?.usageMetadata?.candidatesTokenCount,
+  });
   if (finishReason !== undefined && finishReason !== FinishReason.STOP) {
     annotate({ "app.ai.finish_reason": finishReason });
   }

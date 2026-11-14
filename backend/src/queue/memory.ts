@@ -1,5 +1,6 @@
 import { MAX_RUNS, giveUpGenerateQuizJob, processGenerateQuizJob } from "../core/jobs";
 import type { Deps, MessageState, QuizQueue } from "../core/types";
+import { traceCarrier, withTraceParent } from "../observability/events";
 
 type RunDeps = Pick<Deps, "prisma" | "providers">;
 
@@ -7,6 +8,7 @@ type RunDeps = Pick<Deps, "prisma" | "providers">;
 export function createMemoryQueue() {
   const states = new Map<number, MessageState>();
   const runs = new Map<number, number>();
+  const traces = new Map<number, Record<string, string>>();
 
   // Gives a job its next run, as a worker would. Overlapping calls act like a takeover after a stall.
   async function deliver(deps: RunDeps, generateQuizJobId: number): Promise<void> {
@@ -14,12 +16,16 @@ export function createMemoryQueue() {
     runs.set(generateQuizJobId, run);
     const final = run >= MAX_RUNS;
     try {
-      await processGenerateQuizJob(deps, generateQuizJobId, { run, final });
+      await withTraceParent(traces.get(generateQuizJobId), () =>
+        processGenerateQuizJob(deps, generateQuizJobId, { run, final }),
+      );
       states.set(generateQuizJobId, "finished");
     } catch {
       if (!final) return; // Still waiting, for a retry.
       states.set(generateQuizJobId, "finished");
-      await giveUpGenerateQuizJob(deps, generateQuizJobId);
+      await withTraceParent(traces.get(generateQuizJobId), () =>
+        giveUpGenerateQuizJob(deps, generateQuizJobId),
+      );
     }
   }
 
@@ -27,7 +33,9 @@ export function createMemoryQueue() {
 
   return {
     async send(generateQuizJobId: number) {
-      if (!states.has(generateQuizJobId)) states.set(generateQuizJobId, "waiting");
+      if (states.has(generateQuizJobId)) return;
+      states.set(generateQuizJobId, "waiting");
+      traces.set(generateQuizJobId, traceCarrier());
     },
     async stateOf(generateQuizJobId: number) {
       return states.get(generateQuizJobId) ?? "gone";

@@ -7,10 +7,14 @@ import {
   depsWith,
   eventually,
   jobRow,
+  newUser,
   prisma,
+  upload,
   userWithDocument,
   writes,
 } from "./generateQuizJobFixtures";
+import { startTestTracing } from "./fixtures";
+import { withWideEvent } from "../src/observability/events";
 import { testQueueSettings } from "./testDatabase";
 
 // The BullMQ adapter against real BullMQ on the test schema.
@@ -52,7 +56,7 @@ describe("the BullMQ queue", () => {
   it("sends a job once, however often it is sent", async () => {
     const { jobId } = await userWithDocument(succeeding);
     await queue.send(jobId);
-    expect((await message(jobId))?.data).toEqual({ generateQuizJobId: jobId });
+    expect((await message(jobId))?.data).toMatchObject({ generateQuizJobId: jobId });
     expect(await queue.bull.getJobCounts("waiting")).toEqual({ waiting: 1 });
   });
 
@@ -72,6 +76,27 @@ describe("the BullMQ worker", () => {
       expect(await jobRow(jobId)).toMatchObject({ status: "succeeded", attempts: 1 }),
     );
     expect(await queue.stateOf(jobId)).toBe("finished");
+  });
+
+  it("carries the trace through the queue, so a Run is a child of its request", async () => {
+    const tracing = startTestTracing();
+    try {
+      await startTestWorker(succeeding);
+      const { id: userId } = await newUser();
+      const { jobId } = await withWideEvent("http.request", {}, () => upload(succeeding, userId));
+      await eventually(async () => expect((await jobRow(jobId)).status).toBe("succeeded"));
+
+      const [request] = tracing.spans("http.request");
+      const run = await eventually(async () => {
+        const [span] = tracing.spans("job.run");
+        expect(span).toBeDefined();
+        return span;
+      });
+      expect(run.spanContext().traceId).toBe(request.spanContext().traceId);
+      expect(run.parentSpanContext?.spanId).toBe(request.spanContext().spanId);
+    } finally {
+      await tracing.stop();
+    }
   });
 
   it("runs jobs side by side up to its concurrency", async () => {

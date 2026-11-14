@@ -7,7 +7,14 @@ import { RecitationError, streamText } from "../src/providers/gemini/client";
 import { GeminiTextExtractor, filePartFor } from "../src/providers/gemini/textExtractor";
 import { readLocally } from "../src/providers/localText";
 import { countQuestionsWritten } from "../src/providers/progress";
-import { DOCX, captureEvents, docxWith, finishedWith, geminiStreaming } from "./fixtures";
+import {
+  DOCX,
+  captureEvents,
+  docxWith,
+  finishedWith,
+  geminiStreaming,
+  startTestTracing,
+} from "./fixtures";
 
 describe("readLocally", () => {
   it("decodes text and markdown without calling the AI", async () => {
@@ -153,6 +160,31 @@ describe("streamText", () => {
     expect(error).toBeInstanceOf(PermanentJobError);
     expect(error.message).toBe("The AI declined to read this file.");
     expect(error.cause.message).toMatch(/finished with RECITATION; safety ratings: .*HARASSMENT/);
+  });
+
+  it("records each call as a span with its model, finish reason and token counts", async () => {
+    const tracing = startTestTracing();
+    try {
+      const ai = geminiStreaming(
+        { text: "All of it" },
+        {
+          candidates: [{ finishReason: "STOP" }],
+          usageMetadata: { promptTokenCount: 120, candidatesTokenCount: 30 },
+        },
+      );
+      await streamText(ai, { model: "gemini-test", contents: [] }, outcome);
+      expect(tracing.spans("gemini.generate_content")[0].attributes).toEqual({
+        "gen_ai.operation.name": "generate_content",
+        "gen_ai.provider.name": "gcp.gemini",
+        "gen_ai.request.model": "gemini-test",
+        "app.ai.task": "read this file",
+        "gen_ai.response.finish_reasons": "STOP",
+        "gen_ai.usage.input_tokens": 120,
+        "gen_ai.usage.output_tokens": 30,
+      });
+    } finally {
+      await tracing.stop();
+    }
   });
 
   it("keeps the reason when Gemini blocks the prompt", async () => {

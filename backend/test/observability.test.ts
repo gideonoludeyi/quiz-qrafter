@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vite-plus/test";
-import { annotate, withWideEvent } from "../src/observability/events";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
+import { annotate, withSpan, withWideEvent } from "../src/observability/events";
 import { redactText } from "../src/observability/redact";
 import { PermanentJobError } from "../src/providers/errors";
-import { captureEvents } from "./fixtures";
+import { captureEvents, startTestTracing } from "./fixtures";
 
 describe("redactText", () => {
   it.each([
@@ -87,5 +87,40 @@ describe("wide events", () => {
     annotate({ "app.user.id": 1 });
     events.stop();
     expect(events.lines).toEqual([]);
+  });
+});
+
+describe("tracing", () => {
+  let tracing: ReturnType<typeof startTestTracing>;
+  beforeAll(() => {
+    tracing = startTestTracing();
+  });
+  beforeEach(() => tracing.reset());
+  afterAll(() => tracing.stop());
+
+  it("gives each event its span's trace id, and the span the event's fields", async () => {
+    const events = captureEvents();
+    await withWideEvent("job.run", { "app.job.id": 7 }, async () => {
+      annotate({ "app.job.outcome": "succeeded" });
+    });
+    events.stop();
+
+    const [span] = tracing.spans("job.run");
+    expect(events.lines[0].trace_id).toBe(span.spanContext().traceId);
+    expect(span.attributes).toMatchObject({ "app.job.id": 7, "app.job.outcome": "succeeded" });
+  });
+
+  it("nests a step's span under its event, and marks it failed if it throws", async () => {
+    await withWideEvent("job.run", {}, () =>
+      withSpan("gemini.generate_content", { "app.ai.task": "write a quiz" }, async () => {
+        throw new Error("503 overloaded");
+      }),
+    ).catch(() => {});
+
+    const [run] = tracing.spans("job.run");
+    const [call] = tracing.spans("gemini.generate_content");
+    expect(call.parentSpanContext?.spanId).toBe(run.spanContext().spanId);
+    expect(call.attributes).toMatchObject({ "app.ai.task": "write a quiz", "error.type": "Error" });
+    expect(call.status.code).toBe(2); // ERROR
   });
 });
