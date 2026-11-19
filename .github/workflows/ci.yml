@@ -36,6 +36,11 @@ jobs:
 
       - run: npm ci
 
+      # The schema lives in backend/, so npm ci's postinstall doesn't generate the client.
+      - name: Generate the Prisma client
+        run: npx prisma generate
+        working-directory: backend
+
       - name: Format, lint and type check
         run: npx vp check
 
