@@ -44,7 +44,9 @@ export function createApp(config: Config, deps: Deps) {
   // The single-page frontend: real files first, then index.html for client-side routes.
   if (config.staticDir) {
     const root = config.staticDir;
-    app.use("*", async (c, next) => (c.req.path.startsWith("/api/") ? next() : serveStatic({ root })(c, next)));
+    app.use("*", async (c, next) =>
+      c.req.path.startsWith("/api/") ? next() : serveStatic({ root })(c, next),
+    );
     app.get("*", async (c, next) =>
       c.req.path.startsWith("/api/") ? next() : serveStatic({ root, path: "index.html" })(c, next),
     );
