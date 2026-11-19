@@ -1,3 +1,4 @@
+import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { routePath } from "hono/route";
@@ -39,6 +40,15 @@ export function createApp(config: Config, deps: Deps) {
   app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
   app.route("/api/v1", v1Router(auth, deps));
+
+  // The single-page frontend: real files first, then index.html for client-side routes.
+  if (config.staticDir) {
+    const root = config.staticDir;
+    app.use("*", async (c, next) => (c.req.path.startsWith("/api/") ? next() : serveStatic({ root })(c, next)));
+    app.get("*", async (c, next) =>
+      c.req.path.startsWith("/api/") ? next() : serveStatic({ root, path: "index.html" })(c, next),
+    );
+  }
   app.onError(errorHandler);
 
   return app;

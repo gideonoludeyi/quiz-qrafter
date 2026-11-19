@@ -1,0 +1,48 @@
+#cloud-config
+# Host preparation for the Quiz Qrafter Droplet. Kamal installs Docker itself.
+package_update: true
+package_upgrade: true
+packages:
+  - ufw
+  - unattended-upgrades
+  - curl
+
+write_files:
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+  - path: /etc/sysctl.d/60-quizqrafter.conf
+    content: |
+      vm.swappiness = 10
+  - path: /usr/local/bin/quizqrafter-backup
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      # Dumps Postgres and mirrors uploads to Spaces; rclone remote "spaces" lives in /root/.config/rclone/rclone.conf.
+      set -euo pipefail
+      bucket=${QUIZQRAFTER_BACKUP_BUCKET:-quizqrafter-gdly-backups}
+      stamp=$(date -u +%Y%m%dT%H%M%SZ)
+      mkdir -p /var/backups/quizqrafter
+      docker exec quizqrafter-db pg_dump -U quizqrafter -Fc quizqrafter > "/var/backups/quizqrafter/quizqrafter-$stamp.dump"
+      rclone copy "/var/backups/quizqrafter/quizqrafter-$stamp.dump" "spaces:$bucket/postgres/"
+      rclone sync /var/lib/quizqrafter/data "spaces:$bucket/uploads/"
+      find /var/backups/quizqrafter -name 'quizqrafter-*.dump' -mtime +2 -delete
+  - path: /etc/cron.d/quizqrafter-backup
+    content: |
+      0 4 * * * root /usr/local/bin/quizqrafter-backup >> /var/log/quizqrafter-backup.log 2>&1
+
+runcmd:
+  - fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+  - echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  - sysctl --system
+  # Ubuntu's rclone (1.60) always sends an ACL header, which bucket-scoped Spaces keys reject.
+  - curl -fsSLo /tmp/rclone.deb https://downloads.rclone.org/rclone-current-linux-amd64.deb && dpkg -i /tmp/rclone.deb
+  # Uploads are written by the image's non-root "node" user (uid 1000).
+  - mkdir -p /var/lib/quizqrafter/data /var/lib/quizqrafter/postgres && chown 1000:1000 /var/lib/quizqrafter/data
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw --force enable

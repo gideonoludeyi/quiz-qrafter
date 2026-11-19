@@ -1,0 +1,72 @@
+# Kamal 2 deployment: one Droplet running the API, quiz workers and Postgres.
+service: quizqrafter
+
+image: gideonoludeyi/quiz-qrafter
+
+servers:
+  web:
+    hosts:
+      - 159.203.7.31
+  worker:
+    hosts:
+      - 159.203.7.31
+    cmd: npm run worker --workspace=backend
+
+# kamal-proxy terminates TLS with Let's Encrypt and forwards to the API, which also serves the frontend.
+proxy:
+  ssl: true
+  host: quizqrafter.gdly.me
+  app_port: 8080
+  healthcheck:
+    path: /healthz
+
+registry:
+  server: ghcr.io
+  username: gideonoludeyi
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+env:
+  clear:
+    NODE_ENV: production
+    PORT: 8080
+    FRONTEND_URL: https://quizqrafter.gdly.me
+    EMAIL: resend
+    EMAIL_FROM: "Quiz Qrafter <info@quizqrafter.gdly.me>"
+    STORAGE: local
+    LOCAL_DATA_DIR: /data
+    AI: gemini
+    QUEUE_SCHEMA: bullmq
+    WORKER_CONCURRENCY: 2
+  secret:
+    - DATABASE_URL
+    - BETTER_AUTH_SECRET
+    - RESEND_API_KEY
+    - GEMINI_API_KEY
+
+# The API and the workers share uploads and transcripts through this host directory.
+volumes:
+  - "/var/lib/quizqrafter/data:/data"
+
+accessories:
+  db:
+    image: postgres:15
+    host: 159.203.7.31
+    env:
+      clear:
+        POSTGRES_DB: quizqrafter
+        POSTGRES_USER: quizqrafter
+      secret:
+        - POSTGRES_PASSWORD
+    volumes:
+      - "/var/lib/quizqrafter/postgres:/var/lib/postgresql/data"
+
+ssh:
+  user: root
+
+# Build on the Droplet itself so a non-amd64 laptop needs no emulation.
+builder:
+  arch: amd64
+  remote: ssh://root@159.203.7.31
+  args:
+    VITE_API_URL: https://quizqrafter.gdly.me

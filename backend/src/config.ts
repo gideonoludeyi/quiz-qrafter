@@ -17,6 +17,8 @@ const EnvSchema = z.object({
   PORT: z.coerce.number().int().default(8080),
   // Comma-separated list of origins allowed to call the API.
   FRONTEND_URL: z.string().default("http://localhost:3000"),
+  // The built frontend, served by the API in production. Unset in development, where Vite serves it.
+  STATIC_DIR: blankAsUnset(z.string().optional()),
   // Signs better-auth's session cookies and tokens. Required in production.
   BETTER_AUTH_SECRET: blankAsUnset(z.string().min(32).optional()),
   // How password reset emails go out: sent with Resend, or printed to the log.
@@ -103,6 +105,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     frontendOrigins: parsed.FRONTEND_URL.split(",")
       .map((origin) => origin.trim())
       .filter(Boolean),
+    staticDir: parsed.STATIC_DIR,
     auth: {
       secret: parsed.BETTER_AUTH_SECRET ?? "development-only-better-auth-secret-0123456789",
     },
