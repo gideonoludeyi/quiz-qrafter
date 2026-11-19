@@ -29,6 +29,8 @@ ENV VITE_API_URL=${VITE_API_URL}
 RUN npm run build && npm prune --omit=dev --ignore-scripts
 
 FROM base
+# Links the ghcr.io package to the repository, so the CI workflow token can push to it.
+LABEL org.opencontainers.image.source="https://github.com/gideonoludeyi/quiz-qrafter"
 ENV NODE_ENV=production \
     STATIC_DIR=/app/frontend/dist
 COPY --from=build --chown=node:node /app /app
